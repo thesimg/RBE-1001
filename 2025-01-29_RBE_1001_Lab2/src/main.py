@@ -23,7 +23,7 @@ LINING_TO_WALL = 8
 # start out in the idle state
 current_state = IDLE
 
-turn_counter = 0
+turn_counter = 1
 
 # Define the brain
 brain=Brain()
@@ -41,6 +41,7 @@ controller = Controller()
 
 # Sensor Declarations
 front_sonar = Sonar(brain.three_wire_port.e)
+front_sonar_timer = Timer()
 
 right_reflectance = Line(brain.three_wire_port.b)
 left_reflectance = Line(brain.three_wire_port.a)
@@ -62,7 +63,7 @@ def handleLeft1Button():
 
     if(current_state == IDLE):
         print('IDLE -> SEARCHING_FOR_LINE')
-        current_state = LINING_TO_WALL
+        current_state = SEARCHING_FOR_LINE
 
     else: # in any other state, the button acts as a kill switch
         print(' -> IDLE')
@@ -88,17 +89,17 @@ def followLine(direction):
     # right motor gets 50 - 50*0.1 = 45
     # so robot should turn left
     error = right_reflectance.reflectivity() - left_reflectance.reflectivity()
-    print("error: " + str(error))
-    base_speed_RPM = 100
-    kP = 0.3
+    # print("error: " + str(error))
+    base_speed_RPM = 200
+    kP = 1
     if direction == "REVERSE":
       left_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
       right_motor.spin(REVERSE, base_speed_RPM + error * kP, RPM)
     else:
       left_motor.spin(FORWARD, base_speed_RPM + error * kP, RPM)
-      print("left: " + str(base_speed_RPM + error * kP))
+      # print("left: " + str(base_speed_RPM + error * kP))
       right_motor.spin(FORWARD, base_speed_RPM - error * kP, RPM)
-      print("right: " + str(base_speed_RPM - error * kP))
+      # print("right: " + str(base_speed_RPM - error * kP))
 
 def detectTurn():
    if right_reflectance.reflectivity() > 50 and left_reflectance.reflectivity() > 50:
@@ -113,32 +114,36 @@ def detectLine():
 def turnByDegrees(direction, degrees, nextState):
     global current_state
     global turn_counter
+    turn_counted = False
     imu.reset_rotation()
     print("imu rotation reset")
 
     while True:
-      print("target rotation: " + str(degrees))
-      print("actual rotation", imu.rotation())
+      # print("target rotation: " + str(degrees))
+      # print("actual rotation", imu.rotation())
       
       if(direction == "RIGHT"):
-        left_motor.spin(FORWARD, 100, RPM)
+        left_motor.spin(FORWARD, 150, RPM)
         right_motor.stop()
       else:
         left_motor.stop()
-        right_motor.spin(FORWARD, 100, RPM)
+        right_motor.spin(FORWARD, 150, RPM)
 
       if(abs(imu.rotation()) > abs(degrees)):
         break
     
-    turn_counter += 1
+    front_sonar_timer.clear()    
+    # if(turn_counted == False):
+    turn_counter += 1 # count the turns, so we know which one is turning to cross the field and needs to be more dictated by gyro
+      # turn_counted = True
     current_state = nextState
 
 def followHeading(direction):
   error = imu.rotation()
-  print("error: " + str(error))
+  # print("error: " + str(error))
   
   kP = 12.5
-  base_speed_RPM = 100
+  base_speed_RPM = 200
 
   if direction == "REVERSE":
       left_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
@@ -154,8 +159,8 @@ def goDistance(direction, distance, nextState):
     left_motor.reset_position()
     right_motor.reset_position()
     while True:
-      print("left motor: " + str(left_motor.position()))
-      print("left motor inches: " + str(encoderToInches(left_motor.position())))
+      # print("left motor: " + str(left_motor.position()))
+      # print("left motor inches: " + str(encoderToInches(left_motor.position())))
 
       followHeading(direction)
       
@@ -174,6 +179,8 @@ while True:
     brain.screen.print("current state " + str(current_state))
     brain.screen.new_line()
     brain.screen.print("rotation " + str(imu.rotation()))
+    brain.screen.new_line()
+    brain.screen.print("turn count " + str(turn_counter))
     brain.screen.set_cursor(1, 1)
     # print(front_sonar.distance(INCHES))
     # if(checkSonarComplete()): handleSonar()
@@ -193,18 +200,24 @@ while True:
       left_motor.stop()
       right_motor.spin(FORWARD, 100, RPM)
 
-      turnByDegrees("LEFT", 70, LINING)
+      if(turn_counter == 3):
+        turnByDegrees("LEFT", 90, LINING_TO_WALL)
+      else:
+        turnByDegrees("LEFT", 90, LINING)
       # current_state = LINING
       pass
 
     elif current_state == TURNING_RIGHT:
-      if turn_counter > 2:
+      if turn_counter == 4:
         current_state = TURNING_TO_CROSS_FIELD # override turn logic and turn 90 degrees to cross the field
 
       left_motor.spin(FORWARD, 100, RPM)
       right_motor.stop()
 
-      turnByDegrees("RIGHT", 70, LINING)
+      if(turn_counter == 3):
+        turnByDegrees("RIGHT", 90, LINING_TO_WALL)
+      else:
+        turnByDegrees("RIGHT", 90, LINING)
       # current_state = LINING
       pass
 
@@ -219,9 +232,11 @@ while True:
     elif current_state == LINING_TO_WALL:
       followLine("FORWARD")
 
-      print(front_sonar.distance(INCHES))
+      print("distance: " + str(front_sonar.distance(INCHES)))
+      print("time: " + str(front_sonar_timer.time()))
 
-      if front_sonar.distance(INCHES) < 20:
+
+      if front_sonar.distance(INCHES) < 25 and front_sonar_timer.time() > 5000:
         print(" -> TURNING")
         current_state = TURNING_TO_CROSS_FIELD
       
@@ -240,7 +255,8 @@ while True:
           break
 
     elif current_state == TURNING_TO_CROSS_FIELD:
-       turnByDegrees("RIGHT", 90, SEARCHING_FOR_LINE)
+      turn_counter = 0
+      turnByDegrees("RIGHT", 90, SEARCHING_FOR_LINE)
 
     else:
       print('Invalid state')
