@@ -26,16 +26,28 @@ brain = Brain()
 
 controller = Controller()
 
-## Define states and state variable
-ROBOT_IDLE = 0
-ROBOT_SEARCHING = 1
-ROBOT_APPROACHING = 2
+imu = Inertial(Ports.PORT6)
 
-current_state = ROBOT_IDLE
+# calibrate imu
+imu.calibrate()
+# wait 2 seconds for imu to calibrate
+
+imu.reset_rotation()
+
+
+## Define states and state variable
+IDLE = 0
+SEARCHING_FOR_FRUIT = 1
+DRIVING_TO_FRUIT = 2
+HARVESTING_FRUIT = 3
+
+current_state = IDLE
 
 # Define the motors
 left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
 right_motor = Motor(Ports.PORT10, GearSetting.RATIO_18_1, True)
+
+lift_motor = Motor(Ports.PORT8, GearSetting.RATIO_18_1, False)
 
 
 ## Define the camera (vision)
@@ -46,32 +58,12 @@ Vision__LEMON = Signature (2, 2967, 3781, 3374, -3731, -3459, -3595, 9.1, 0)
 Vision__ORANGUTAN = Signature (3, 7895, 8839, 8367, -2645, -2313, -2479, 6.9, 0)
 Vision__DRAGONFRUIT = Signature (4, 5231, 5733, 5482, 2935, 3963, 3449, 10, 0)
 
-
 camera = Vision (Ports.PORT7, 50, Vision__LEMON, Vision__DRAGONFRUIT)
 
-'''
-The button (bumper) makes use of the built-in event system.
-'''
-# button = Bumper(brain.three_wire_port.g)
-
-def handleButton():
+# utilities
+def setState(newState):
     global current_state
-
-    if(current_state == ROBOT_IDLE):
-        print('IDLE -> SEARCHING') ## Pro-tip: print out state _transitions_
-        current_state = ROBOT_SEARCHING
-        # left_motor.spin(FORWARD, 30)
-        # right_motor.spin(FORWARD, -30)
-
-        ## start the timer for the camera
-        cameraTimer.event(cameraTimerCallback, 50)
-
-    else: ## failsafe; go to IDLE from any other state when button is pressed
-        print(' -> IDLE')
-        current_state = ROBOT_IDLE
-        left_motor.stop()
-        right_motor.stop()
-
+    current_state = newState
 
 lemonViews = 0
 dragonfruitViews = 0
@@ -119,8 +111,65 @@ def checkForFruit():
     overallTrials += 1
     print("Overall trials: " + str(overallTrials))
 
+def buttonPressed():
+    print("button pressed")
 
-controller.buttonL1.pressed(checkForFruit)
+# controller.buttonL1.pressed(checkForFruit)
+# controller.buttonL1.pressed(buttonPressed)
+controller.buttonL2.pressed(lambda: setState(DRIVING_TO_FRUIT))
+
+def driveToFruit():
+    lemons = camera.take_snapshot(Vision__LEMON)
+
+    if(lemons):
+        object_x = camera.largest_object().centerX
+        object_y = camera.largest_object().centerY
+        object_height = camera.largest_object().height
+
+        left_power = 0
+        right_power = 0
+
+        # DRIVE
+        # target_x = 160
+        # TURN
+        kP_turn = 0.01
+        x_error = object_x - 157.5
+        left_turn_power = kP_turn * x_error
+        right_turn_power = -kP_turn * x_error
+        # left_motor.spin(REVERSE, 10 + kP_turn * x_error)
+        # right_motor.spin(REVERSE, 10 - kP_turn * x_error)
+        
+        # DRIVE
+        kP_drive = 0.01
+        drive_error = object_height - 200
+        left_drive_power = kP_drive * drive_error
+        right_drive_power = kP_drive * drive_error
+
+        left_power = left_drive_power - left_turn_power
+        right_power = right_drive_power - right_turn_power
+
+        print("left turn power: " + str(left_turn_power) + "  right turn power: " + str(right_turn_power))
+        print("left drive power: " + str(left_drive_power) + "  right drive power: " + str(right_drive_power))
+        print("left power: " + str(left_power) + "  right power: " + str(right_power))
+        print("\n")
+
+        left_motor.spin(FORWARD, left_power)
+        right_motor.spin(FORWARD, right_power)
+
+        # LIFT
+        kP_lift = 0.01
+        y_error = object_y - 105.5
+        lift_power = kP_lift * y_error
+        lift_motor.spin(FORWARD, lift_power)
+
+        print("lift (y) error: " + str(y_error))
+        print("lift power: " + str(lift_power))
+        print("\n\n")
+
+        if(object_height > 200):
+            print("Object is close enough")
+            return True
+
 
 def calcDistanceFromPixels(width_px):
     # print out the distance from the object in cm, using pinhole approximation, using width of the block in pixels
@@ -133,79 +182,154 @@ def calcDistanceFromPixels(width_px):
     return (50 * 30) / width_px
 
 
-'''
-We'll keep track of missed detections. If it exceeds some threshold, go back to SEARCHING
-'''
-missedDetections = 0
-def handleLostObject():
-    global current_state
-    if current_state == ROBOT_APPROACHING:
-        print('APPROACHING -> SEARCHING') ## Pro-tip: print out state _transitions_
-        current_state = ROBOT_SEARCHING
-        left_motor.spin(FORWARD, 30)
-        right_motor.spin(FORWARD, -30)
-
-'''
-We'll use a timer to read the camera every cameraInterval milliseconds
-'''
-cameraInterval = 50
-cameraTimer = Timer()
-
-def cameraTimerCallback():
-    global current_state
-    global missedDetections
-
-    ## Here we use a checker-handler, where the checker checks if there is a new object detection.
-    ## We don't use a "CheckForObjects()" function because take_snapshot() acts as the checker.
-    ## It returns a non-empty list if there is a detection.
-    objects = camera.take_snapshot(Vision__LEMON)
-    if objects: handleObjectDetection()
-    else: missedDetections = missedDetections + 1
-
-    # restart the timer
-    if(current_state != ROBOT_IDLE):
-        cameraTimer.event(cameraTimerCallback, 50)
-
-
-def handleObjectDetection():
-    global current_state
-    global object_timer
-    global missedDetections
-
-    cx = camera.largest_object().centerX
-    cy = camera.largest_object().centerY
-
-    ## TODO: Add code to print out the coordinates and size
-
-
-    if current_state == ROBOT_SEARCHING:
-        print('SEARCHING -> APPROACHING') ## Pro-tip: print out state _transitions_
-        current_state = ROBOT_APPROACHING
-
-    ## Not elif, because we want the logic to cascade
-    if current_state == ROBOT_APPROACHING:
-
-        target_x = 160
-        K_x = 0.5
-
-        error = cx - target_x
-        turn_effort = K_x * error
-
-
-        ## TODO: Edit code to approach or back up to hold the right position
-        left_motor.spin(REVERSE, 10 + turn_effort)
-        right_motor.spin(REVERSE, 10 - turn_effort)
-
-    ## reset the time out timer
-    missedDetections = 0
-
-def checkForLostObject():
-    ## this is not a "proper" event checker -- need to be reasonable
-    if(missedDetections > 20): return True
-    else: return False
 
 ## Our main loop
 while True:
     ## if enough cycles have passed without a detection, we've lost the object
-    if(checkForLostObject()): handleLostObject()
+    # if(checkForLostObject()): handleLostObject()
+    
+    brain.screen.print("current state " + str(current_state))
+    brain.screen.new_line()
+    brain.screen.print("rotation " + str(imu.rotation()))
+    brain.screen.new_line()
+    brain.screen.set_cursor(1, 1)
 
+    if current_state == IDLE:
+        pass
+    elif current_state == SEARCHING_FOR_FRUIT:
+        pass
+    elif current_state == DRIVING_TO_FRUIT:
+        if driveToFruit(): # once the object is close enough, start harvesting
+            setState(HARVESTING_FRUIT)
+    elif current_state == HARVESTING_FRUIT:
+        # lower the lift, this is kinda placeholder code until we get the actual lift mechanism & logic working
+        lift_motor.spin_for(FORWARD, 1000, DEGREES, 50, RPM)
+        setState(IDLE)
+        
+
+
+
+
+
+# def turnByDegrees(direction, degrees, nextState):
+#     # global current_state
+#     # global turn_counter
+#     turn_counted = False
+#     imu.reset_rotation()
+#     print("imu rotation reset")
+
+#     while True:
+#       # print("target rotation: " + str(degrees))
+#       # print("actual rotation", imu.rotation())
+      
+#       if(direction == "RIGHT"):
+#         left_motor.spin(FORWARD, 150, RPM)
+#         right_motor.stop()
+#       else:
+#         left_motor.stop()
+#         right_motor.spin(FORWARD, 150, RPM)
+
+#       if(abs(imu.rotation()) > abs(degrees)):
+#         break
+    
+#     # front_sonar_timer.clear()    
+#     # # if(turn_counted == False):
+#     # turn_counter += 1 # count the turns, so we know which one is turning to cross the field and needs to be more dictated by gyro
+#     #   # turn_counted = True
+#     # current_state = nextState
+
+
+'''
+The button (bumper) makes use of the built-in event system.
+'''
+# button = Bumper(brain.three_wire_port.g)
+
+# def handleButton():
+#     global current_state
+
+#     if(current_state == ROBOT_IDLE):
+#         print('IDLE -> SEARCHING') ## Pro-tip: print out state _transitions_
+#         current_state = ROBOT_SEARCHING
+#         # left_motor.spin(FORWARD, 30)
+#         # right_motor.spin(FORWARD, -30)
+
+#         ## start the timer for the camera
+#         cameraTimer.event(cameraTimerCallback, 50)
+
+#     else: ## failsafe; go to IDLE from any other state when button is pressed
+#         print(' -> IDLE')
+#         current_state = ROBOT_IDLE
+#         left_motor.stop()
+#         right_motor.stop()
+
+
+'''
+We'll keep track of missed detections. If it exceeds some threshold, go back to SEARCHING
+'''
+# missedDetections = 0
+# def handleLostObject():
+#     global current_state
+#     if current_state == ROBOT_APPROACHING:
+#         print('APPROACHING -> SEARCHING') ## Pro-tip: print out state _transitions_
+#         current_state = ROBOT_SEARCHING
+#         left_motor.spin(FORWARD, 30)
+#         right_motor.spin(FORWARD, -30)
+
+'''
+We'll use a timer to read the camera every cameraInterval milliseconds
+'''
+# cameraInterval = 50
+# cameraTimer = Timer()
+
+# def cameraTimerCallback():
+#     global current_state
+#     global missedDetections
+
+#     ## Here we use a checker-handler, where the checker checks if there is a new object detection.
+#     ## We don't use a "CheckForObjects()" function because take_snapshot() acts as the checker.
+#     ## It returns a non-empty list if there is a detection.
+#     objects = camera.take_snapshot(Vision__LEMON)
+#     if objects: handleObjectDetection()
+#     else: missedDetections = missedDetections + 1
+
+#     # restart the timer
+#     if(current_state != ROBOT_IDLE):
+#         cameraTimer.event(cameraTimerCallback, 50)
+
+
+# def handleObjectDetection():
+#     global current_state
+#     global object_timer
+#     global missedDetections
+
+#     cx = camera.largest_object().centerX
+#     cy = camera.largest_object().centerY
+
+#     ## TODO: Add code to print out the coordinates and size
+
+
+#     if current_state == ROBOT_SEARCHING:
+#         print('SEARCHING -> APPROACHING') ## Pro-tip: print out state _transitions_
+#         current_state = ROBOT_APPROACHING
+
+#     ## Not elif, because we want the logic to cascade
+#     if current_state == ROBOT_APPROACHING:
+
+#         target_x = 160
+#         K_x = 0.5
+
+#         error = cx - target_x
+#         turn_effort = K_x * error
+
+
+#         ## TODO: Edit code to approach or back up to hold the right position
+#         left_motor.spin(REVERSE, 10 + turn_effort)
+#         right_motor.spin(REVERSE, 10 - turn_effort)
+
+#     ## reset the time out timer
+#     missedDetections = 0
+
+# def checkForLostObject():
+#     ## this is not a "proper" event checker -- need to be reasonable
+#     if(missedDetections > 20): return True
+#     else: return False
