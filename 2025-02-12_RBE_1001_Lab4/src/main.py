@@ -20,6 +20,7 @@ if the counter reaches a threshold, the robot goes back into searching mode.
 
 # Library imports
 from vex import *
+import os
 
 # Brain should be defined by default
 brain = Brain()
@@ -47,7 +48,7 @@ current_state = IDLE
 left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
 right_motor = Motor(Ports.PORT10, GearSetting.RATIO_18_1, True)
 
-lift_motor = Motor(Ports.PORT8, GearSetting.RATIO_18_1, False)
+lift_motor = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
 
 
 ## Define the camera (vision)
@@ -119,6 +120,8 @@ def buttonPressed():
 controller.buttonL2.pressed(lambda: setState(DRIVING_TO_FRUIT))
 
 def driveToFruit():
+    os.system('cls||clear')
+    print("driving to fruit")
     lemons = camera.take_snapshot(Vision__LEMON)
 
     if(lemons):
@@ -132,7 +135,7 @@ def driveToFruit():
         # DRIVE
         # target_x = 160
         # TURN
-        kP_turn = 0.01
+        kP_turn = 0.25
         x_error = object_x - 157.5
         left_turn_power = kP_turn * x_error
         right_turn_power = -kP_turn * x_error
@@ -140,7 +143,7 @@ def driveToFruit():
         # right_motor.spin(REVERSE, 10 - kP_turn * x_error)
         
         # DRIVE
-        kP_drive = 0.01
+        kP_drive = 0
         drive_error = object_height - 200
         left_drive_power = kP_drive * drive_error
         right_drive_power = kP_drive * drive_error
@@ -153,18 +156,17 @@ def driveToFruit():
         print("left power: " + str(left_power) + "  right power: " + str(right_power))
         print("\n")
 
-        left_motor.spin(FORWARD, left_power)
-        right_motor.spin(FORWARD, right_power)
+        left_motor.spin(FORWARD, left_power, PERCENT)
+        right_motor.spin(FORWARD, right_power, PERCENT)
 
         # LIFT
-        kP_lift = 0.01
-        y_error = object_y - 105.5
+        kP_lift = 1.25
+        y_error = object_y - 145 #105.5
         lift_power = kP_lift * y_error
-        lift_motor.spin(FORWARD, lift_power)
+        lift_motor.spin(REVERSE, lift_power, PERCENT)
 
         print("lift (y) error: " + str(y_error))
         print("lift power: " + str(lift_power))
-        print("\n\n")
 
         if(object_height > 200):
             print("Object is close enough")
