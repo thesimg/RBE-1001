@@ -20,7 +20,6 @@ if the counter reaches a threshold, the robot goes back into searching mode.
 
 # Library imports
 from vex import *
-import os
 
 # Brain should be defined by default
 brain = Brain()
@@ -50,6 +49,7 @@ right_motor = Motor(Ports.PORT10, GearSetting.RATIO_18_1, True)
 
 lift_motor = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
 
+hopper_motor = Motor(Ports.PORT8, GearSetting.RATIO_18_1, False)
 
 ## Define the camera (vision)
 ## Note that we define the signatures first and then pass them to the Vision constructor --
@@ -119,8 +119,9 @@ def buttonPressed():
 # controller.buttonL1.pressed(buttonPressed)
 controller.buttonL2.pressed(lambda: setState(DRIVING_TO_FRUIT))
 
+lastTwentyFruitY = [0] * 20
+
 def driveToFruit():
-    os.system('cls||clear')
     print("driving to fruit")
     lemons = camera.take_snapshot(Vision__LEMON)
 
@@ -132,43 +133,51 @@ def driveToFruit():
         left_power = 0
         right_power = 0
 
-        # DRIVE
-        # target_x = 160
         # TURN
-        kP_turn = 0.25
+        kP_turn = 3 #0.75
         x_error = object_x - 157.5
         left_turn_power = kP_turn * x_error
-        right_turn_power = -kP_turn * x_error
+        right_turn_power = kP_turn * -x_error
         # left_motor.spin(REVERSE, 10 + kP_turn * x_error)
         # right_motor.spin(REVERSE, 10 - kP_turn * x_error)
         
         # DRIVE
-        kP_drive = 0
-        drive_error = object_height - 200
+        kP_drive = 2.5
+        drive_error = object_height - 150
         left_drive_power = kP_drive * drive_error
         right_drive_power = kP_drive * drive_error
 
         left_power = left_drive_power - left_turn_power
         right_power = right_drive_power - right_turn_power
 
+        print("\n\n\n")
+        print("height: " + str(object_height))
         print("left turn power: " + str(left_turn_power) + "  right turn power: " + str(right_turn_power))
         print("left drive power: " + str(left_drive_power) + "  right drive power: " + str(right_drive_power))
         print("left power: " + str(left_power) + "  right power: " + str(right_power))
         print("\n")
 
-        left_motor.spin(FORWARD, left_power, PERCENT)
-        right_motor.spin(FORWARD, right_power, PERCENT)
+        left_motor.spin(REVERSE, left_power, PERCENT)
+        right_motor.spin(REVERSE, right_power, PERCENT)
 
         # LIFT
-        kP_lift = 1.25
-        y_error = object_y - 145 #105.5
-        lift_power = kP_lift * y_error
-        lift_motor.spin(REVERSE, lift_power, PERCENT)
+        # update the last twenty fruit y values
+        lastTwentyFruitY.pop(0)
+        lastTwentyFruitY.append(object_y)
 
+        # get average of last twenty fruit y values to smooth out the values (TODO: replace with better filter)
+        avgFruitY = sum(lastTwentyFruitY) / len(lastTwentyFruitY)
+
+        kP_lift = 4.5
+        y_error = avgFruitY - 140 #105.5
+        lift_power = kP_lift * y_error
+        lift_motor.spin(FORWARD, lift_power, PERCENT)
+
+        print("object y: " + str(object_y))
         print("lift (y) error: " + str(y_error))
         print("lift power: " + str(lift_power))
 
-        if(object_height > 200):
+        if(object_height > 120 and abs(x_error) < 5 and abs(x_error) < 5):
             print("Object is close enough")
             return True
 
@@ -205,7 +214,24 @@ while True:
             setState(HARVESTING_FRUIT)
     elif current_state == HARVESTING_FRUIT:
         # lower the lift, this is kinda placeholder code until we get the actual lift mechanism & logic working
-        lift_motor.spin_for(FORWARD, 1000, DEGREES, 50, RPM)
+        left_motor.stop()
+        right_motor.stop()
+        lift_motor.stop()
+
+        right_motor.spin(FORWARD, 100, RPM)
+        left_motor.spin_for(FORWARD, 2.75, TURNS, 100, RPM)
+        # right_motor.spin_for(FORWARD, 10, TURNS, 50, RPM)
+        right_motor.stop()
+
+        print("driven to fruit, harvesting next")
+        
+        lift_motor.spin_for(REVERSE, 1, TURNS, 50, RPM)
+
+        
+        right_motor.spin(REVERSE, 200, RPM)
+        left_motor.spin_for(REVERSE, 3, TURNS, 200, RPM)
+        right_motor.stop()
+
         setState(IDLE)
         
 
