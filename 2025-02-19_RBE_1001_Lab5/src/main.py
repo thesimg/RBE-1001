@@ -113,7 +113,7 @@ def checkForFruit():
     print("Overall trials: " + str(overallTrials))
 
 
-controller.buttonL2.pressed(lambda: setState(LINING_BY_DISTANCE))
+controller.buttonL1.pressed(lambda: setState(LINING_BY_DISTANCE))
 
 
 lastTwentyFruitY = [0] * 20
@@ -293,9 +293,10 @@ def goDistance(direction, distance, nextState):
     current_state = nextState
 
 def trackDistanceTraveled(distance):
-  left_motor.reset_position()
   while (True):
-    if(encoderToInches(abs(left_motor.position())) > distance): 
+    print("left motor: " + str(left_motor.position(TURNS)))
+    print("left motor inches: " + str(encoderToInches(left_motor.position(TURNS))))
+    if(encoderToInches(abs(left_motor.position(DEGREES))) > distance): 
       break
   return True
 
@@ -313,9 +314,10 @@ while True:
     if current_state == IDLE:
         pass
     elif current_state == LINING_BY_DISTANCE:
-       followLine("FORWARD")
-      #  if(trackDistanceTraveled("20")):
-      #     setState(TURNING_TO_FRUIT)
+      left_motor.reset_position()
+      while(not trackDistanceTraveled(20)):
+        followLine("FORWARD")
+      # setState(TURNING_TO_FRUIT)
     elif current_state == TURNING_TO_FRUIT:
         turnByDegrees("RIGHT", 90, DRIVING_TO_FRUIT)
     elif current_state == LINING_BY_LINE:
