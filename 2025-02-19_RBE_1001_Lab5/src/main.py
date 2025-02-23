@@ -29,22 +29,26 @@ TURNING_TO_FRUIT = 7
 current_state = IDLE
 
 # Define the motors
-left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
-right_motor = Motor(Ports.PORT10, GearSetting.RATIO_18_1, True)
+left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
+left_motor.reset_position()
+right_motor = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
+right_motor.reset_position()
 
 lift_motor = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
 
 hopper_motor = Motor(Ports.PORT8, GearSetting.RATIO_18_1, False)
+hopper_motor.set_position(0, DEGREES)
+hopper_motor.spin_to_position(75)
 
 ## Define the camera (vision)
 ## Note that we define the signatures first and then pass them to the Vision constructor --
 ## I don't know if that is truly needed or not
-Vision__LIME = Signature (1, -6069, -4855, -5462, -3131, -2407, -2769, 3.9, 0)
-Vision__LEMON = Signature (2, 2967, 3781, 3374, -3731, -3459, -3595, 9.1, 0)
-Vision__ORANGUTAN = Signature (3, 7895, 8839, 8367, -2645, -2313, -2479, 6.9, 0)
-Vision__DRAGONFRUIT = Signature (4, 5231, 5733, 5482, 2935, 3963, 3449, 10, 0)
+Vision__LIME = Signature (1, -6069, -4855, -5462, -3131, -2407, -2769, 3.900, 0)
+Vision__LEMON = Signature (2, 131, 425, 278, -3915, -3429, -3672, 7.400, 0)
+Vision__ORANGUTAN = Signature (3, 5323, 6263, 5793, -2717, -2111, -2414, 1.900, 0)
+# Vision__DRAGONFRUIT = Signature (4, 5231, 5733, 5482, 2935, 3963, 3449, 10, 0)
 
-camera = Vision (Ports.PORT7, 50, Vision__LEMON, Vision__DRAGONFRUIT)
+camera = Vision (Ports.PORT7, 50, Vision__LEMON, Vision__LIME, Vision__ORANGUTAN)
 
 # Sensor Declarations
 front_sonar = Sonar(brain.three_wire_port.e)
@@ -64,6 +68,7 @@ imu.reset_rotation()
 # utilities
 def setState(newState):
     global current_state
+    print("State changed from " + str(current_state) + " to " + str(newState))
     current_state = newState
 
 lemonViews = 0
@@ -79,14 +84,14 @@ def checkForFruit():
     global bothViews
     global overallTrials
 
-    # lemons = camera.take_snapshot(Vision__LEMON)
+    lemons = camera.take_snapshot(Vision__LEMON)
     # limes = camera.take_snapshot(Vision__LIME)
     # orangutans = camera.take_snapshot(Vision__ORANGUTAN)
-    dragonfruits = camera.take_snapshot(Vision__DRAGONFRUIT)
+    # dragonfruits = camera.take_snapshot(Vision__DRAGONFRUIT)
 
     # print("largest object x:", camera.largest_object().centerX, "  y: ", camera.largest_object().centerY, "  w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
 
-    if(dragonfruits and camera.largest_object().width > 30):
+    if(lemons and camera.largest_object().width > 30):
         # print("count: " + str(camera.object_count))
         # print("largest object x:", camera.largest_object().centerX, "  y: ", camera.largest_object().centerY, "  w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
         # print("Dragonfruit detected")
@@ -118,18 +123,24 @@ controller.buttonL1.pressed(lambda: setState(LINING_BY_DISTANCE))
 
 lastTwentyFruitY = [0] * 20
 def driveToFruit(type):
+    snapshot = camera.take_snapshot(Vision__LEMON)
     if type == "lemon":
-      lemons = camera.take_snapshot(Vision__LEMON)
-    elif type == "dragonfruit":
-      dragonfruits = camera.take_snapshot(Vision__DRAGONFRUIT)
+      # lemons = camera.take_snapshot(Vision__LEMON)
+    # elif type == "dragonfruit":
+    #   dragonfruits = camera.take_snapshot(Vision__DRAGONFRUIT)
+      snapshot = camera.take_snapshot(Vision__LEMON)
     elif type == "lime":
-      limes = camera.take_snapshot(Vision__LIME)
+      # limes = camera.take_snapshot(Vision__LIME)
+      snapshot = camera.take_snapshot(Vision__LIME)
     elif type == "orangutan":
-      orangutans = camera.take_snapshot(Vision__ORANGUTAN)
+      # orangutans = camera.take_snapshot(Vision__ORANGUTAN)
+      snapshot = camera.take_snapshot(Vision__ORANGUTAN)
     else:
-      lemons = camera.take_snapshot(Vision__LEMON)
+      # lemons = camera.take_snapshot(Vision__LEMON)
+      snapshot = camera.take_snapshot(Vision__LEMON)
 
-    if(lemons or dragonfruits or limes or orangutans):
+    if(snapshot):
+      if(camera.largest_object().width > 55 and camera.largest_object().height > 55):
         object_x = camera.largest_object().centerX
         object_y = camera.largest_object().centerY
         object_height = camera.largest_object().height
@@ -138,7 +149,7 @@ def driveToFruit(type):
         right_power = 0
 
         # TURN
-        kP_turn = 3 #0.75
+        kP_turn = -1.5 #0.75 # 3
         x_error = object_x - 157.5
         left_turn_power = kP_turn * x_error
         right_turn_power = kP_turn * -x_error
@@ -146,7 +157,7 @@ def driveToFruit(type):
         # right_motor.spin(REVERSE, 10 - kP_turn * x_error)
         
         # DRIVE
-        kP_drive = 2.5
+        kP_drive = 2 # 2.5
         drive_error = object_height - 150
         left_drive_power = kP_drive * drive_error
         right_drive_power = kP_drive * drive_error
@@ -172,7 +183,7 @@ def driveToFruit(type):
         # get average of last twenty fruit y values to smooth out the values (TODO: replace with better filter)
         avgFruitY = sum(lastTwentyFruitY) / len(lastTwentyFruitY)
 
-        kP_lift = 4.5
+        kP_lift = 4.5 # 4.5
         y_error = avgFruitY - 140 #105.5
         lift_power = kP_lift * y_error
         lift_motor.spin(FORWARD, lift_power, PERCENT)
@@ -198,13 +209,13 @@ def calcDistanceFromPixels(width_px):
 
 
 def encoderToInches(degrees):
-  #  The motor has a 12-tooth gear, while the wheel has a 60-tooth gear. 
+  # The motor has a 12-tooth gear, while the wheel has a 60-tooth gear. 
   # This means the motor spins 60/12 = 5 times faster than the wheel. 
   # The wheel has a diameter of 4 inches, so the circumference is 4*pi. 
   # Therefore, the motor must spin 5 * 4 * pi = 20*pi inches to make one full rotation.
   # The motor has a 360 degree rotation, so the number of degrees per inch is 360 / (20*pi) = 18/pi.
   # Therefore, the number of degrees per inch is 18/pi.
-  return degrees * (3.14159/18)
+  return degrees / (130.24367)
 
 
 def followLine(direction):
@@ -214,17 +225,17 @@ def followLine(direction):
     # right motor gets 50 - 50*0.1 = 45
     # so robot should turn left
     error = right_reflectance.reflectivity() - left_reflectance.reflectivity()
-    print("error: " + str(error))
+    # print("error: " + str(error))
     base_speed_RPM = 100 # 100
-    kP = 0.5 # 1
+    kP = 1 # 1
     if direction == "REVERSE":
       left_motor.spin(REVERSE, base_speed_RPM + error * kP, RPM)
       right_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
     else:
       left_motor.spin(FORWARD, base_speed_RPM - error * kP, RPM)
-      print("left: " + str(base_speed_RPM - error * kP))
+      # print("left: " + str(base_speed_RPM - error * kP))
       right_motor.spin(FORWARD, base_speed_RPM + error * kP, RPM)
-      print("right: " + str(base_speed_RPM + error * kP))
+      # print("right: " + str(base_speed_RPM + error * kP))
 
 
 def detectBothReflecting(): # i.e. detect the line
@@ -248,15 +259,17 @@ def turnByDegrees(direction, degrees, nextState):
       
       if(direction == "RIGHT"):
         left_motor.spin(FORWARD, 150, RPM)
+        # right_motor.spin(REVERSE, 150, RPM)
         right_motor.stop()
       else:
         left_motor.stop()
+        # left_motor.spin(REVERSE, 150, RPM)
         right_motor.spin(FORWARD, 150, RPM)
 
       if(abs(imu.rotation()) > abs(degrees)):
         break
     
-    front_sonar_timer.clear()    
+    # front_sonar_timer.clear()    
     current_state = nextState
 
 def followHeading(direction):
@@ -297,13 +310,17 @@ def trackDistanceTraveled(distance):
     print("left motor: " + str(left_motor.position(TURNS)))
     print("left motor inches: " + str(encoderToInches(left_motor.position(TURNS))))
     if(encoderToInches(abs(left_motor.position(DEGREES))) > distance): 
-      break
-  return True
+      return True
+    else:
+      return False
 
 ## Our main loop
 while True:
     ## if enough cycles have passed without a detection, we've lost the object
     # if(checkForLostObject()): handleLostObject()
+
+    if(controller.buttonL2.pressing() and current_state != IDLE):
+        setState(IDLE)
     
     brain.screen.print("current state " + str(current_state))
     brain.screen.new_line()
@@ -312,12 +329,17 @@ while True:
     brain.screen.set_cursor(1, 1)
 
     if current_state == IDLE:
-        pass
+      left_motor.stop()
+      right_motor.stop()
+      lift_motor.stop()
+      # hopper_motor.stop()
     elif current_state == LINING_BY_DISTANCE:
-      left_motor.reset_position()
+      print("starting lining by distance")
       while(not trackDistanceTraveled(20)):
         followLine("FORWARD")
-      # setState(TURNING_TO_FRUIT)
+        print("degrees: " + str(left_motor.position(DEGREES)))
+        print("distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+      setState(TURNING_TO_FRUIT)
     elif current_state == TURNING_TO_FRUIT:
         turnByDegrees("RIGHT", 90, DRIVING_TO_FRUIT)
     elif current_state == LINING_BY_LINE:
