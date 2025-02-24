@@ -25,6 +25,7 @@ LINING_BY_DISTANCE = 4
 LINING_BY_LINE = 5
 TURNING_TO_HEADING = 6
 TURNING_TO_FRUIT = 7
+TURNING_TO_BASKETS = 8
 
 current_state = IDLE
 
@@ -255,22 +256,28 @@ def turnByDegrees(direction, degrees, nextState):
 
     while True:
       # print("target rotation: " + str(degrees))
-      # print("actual rotation", imu.rotation())
       
-      if(direction == "RIGHT"):
-        left_motor.spin(FORWARD, 150, RPM)
-        # right_motor.spin(REVERSE, 150, RPM)
-        right_motor.stop()
-      else:
-        left_motor.stop()
-        # left_motor.spin(REVERSE, 150, RPM)
-        right_motor.spin(FORWARD, 150, RPM)
-
       if(abs(imu.rotation()) > abs(degrees)):
+        print("turn complete")
+        left_motor.stop()
+        right_motor.stop()
+        print("motors stopped")
         break
-    
+      else:
+        print("actual rotation", imu.rotation())
+        
+        if(direction == "RIGHT"):
+          left_motor.spin(FORWARD, 150, RPM)
+          # right_motor.spin(REVERSE, 150, RPM)
+          right_motor.stop()
+        else:
+          left_motor.stop()
+          # left_motor.spin(REVERSE, 150, RPM)
+          right_motor.spin(FORWARD, 150, RPM)
     # front_sonar_timer.clear()    
+    print("state changing from " + str(current_state) + " to " + str(nextState))
     current_state = nextState
+    
 
 def followHeading(direction):
   error = imu.rotation()
@@ -318,8 +325,10 @@ def trackDistanceTraveled(distance):
 while True:
     ## if enough cycles have passed without a detection, we've lost the object
     # if(checkForLostObject()): handleLostObject()
+    print("current state: " + str(current_state))
 
     if(controller.buttonL2.pressing() and current_state != IDLE):
+        print("emergency stop")
         setState(IDLE)
     
     brain.screen.print("current state " + str(current_state))
@@ -362,12 +371,16 @@ while True:
 
         print("driven to fruit, harvesting next")
         
-        lift_motor.spin_for(REVERSE, 1, TURNS, 50, RPM)
+        lift_motor.spin_for(REVERSE, 1.5, TURNS, 50, RPM)
 
         
         right_motor.spin(REVERSE, 200, RPM)
         left_motor.spin_for(REVERSE, 3, TURNS, 200, RPM)
         right_motor.stop()
 
-        setState(IDLE)
+        
+
+        setState(TURNING_TO_BASKETS)
+    elif current_state == TURNING_TO_BASKETS:
+        turnByDegrees("RIGHT", 180, LINING_BY_DISTANCE)
         
