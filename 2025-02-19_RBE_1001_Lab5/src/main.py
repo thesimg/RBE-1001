@@ -26,6 +26,8 @@ LINING_BY_LINE = 5
 TURNING_TO_HEADING = 6
 TURNING_TO_FRUIT = 7
 TURNING_TO_BASKETS = 8
+SQUARING_TO_WALL = 9
+LINING_BY_ULTRASONIC = 10
 
 current_state = IDLE
 
@@ -55,8 +57,11 @@ camera = Vision (Ports.PORT7, 50, Vision__LEMON, Vision__LIME, Vision__ORANGUTAN
 front_sonar = Sonar(brain.three_wire_port.e)
 front_sonar_timer = Timer()
 
-right_reflectance = Line(brain.three_wire_port.b)
-left_reflectance = Line(brain.three_wire_port.a)
+right_front_reflectance = Line(brain.three_wire_port.b)
+left_front_reflectance = Line(brain.three_wire_port.a)
+
+right_back_reflectance = Line(brain.three_wire_port.c)
+left_back_reflectance = Line(brain.three_wire_port.d)
 
 imu = Inertial(Ports.PORT6)
 
@@ -69,8 +74,11 @@ imu.reset_rotation()
 # utilities
 def setState(newState):
     global current_state
-    print("State changed from " + str(current_state) + " to " + str(newState))
-    current_state = newState
+    if(not imu.is_calibrating()):
+      print("State changed from " + str(current_state) + " to " + str(newState))
+      current_state = newState
+    else:
+      print("imu is calibrating, not changing state")
 
 lemonViews = 0
 dragonfruitViews = 0
@@ -141,7 +149,7 @@ def driveToFruit(type):
       snapshot = camera.take_snapshot(Vision__LEMON)
 
     if(snapshot):
-      if(camera.largest_object().width > 55 and camera.largest_object().height > 55):
+      if(camera.largest_object().width > 40 and camera.largest_object().height > 40):
         object_x = camera.largest_object().centerX
         object_y = camera.largest_object().centerY
         object_height = camera.largest_object().height
@@ -196,6 +204,13 @@ def driveToFruit(type):
         if(object_height > 120 and abs(x_error) < 5 and abs(x_error) < 5):
             print("Object is close enough")
             return True
+      else:
+        print("Object is too far away")
+        # left_motor.stop()
+        # right_motor.stop()
+        left_motor.spin(FORWARD, 50, RPM)
+        right_motor.spin(REVERSE, 50, RPM)
+        lift_motor.stop()
 
 
 def calcDistanceFromPixels(width_px):
@@ -220,12 +235,12 @@ def encoderToInches(degrees):
 
 
 def followLine(direction):
-    # use right_reflectance and left_reflectance to follow the line
+    # use right_front_reflectance and left_front_reflectance to follow the line
     # TRACING: 100 - 50 = 50, so robot is too far to the left
     # left motor gets 50 + 50*0.1 = 55
     # right motor gets 50 - 50*0.1 = 45
     # so robot should turn left
-    error = right_reflectance.reflectivity() - left_reflectance.reflectivity()
+    error = right_front_reflectance.reflectivity() - left_front_reflectance.reflectivity()
     # print("error: " + str(error))
     base_speed_RPM = 100 # 100
     kP = 1 # 1
@@ -240,24 +255,26 @@ def followLine(direction):
 
 
 def detectBothReflecting(): # i.e. detect the line
-   if right_reflectance.reflectivity() > 50 and left_reflectance.reflectivity() > 50:
+   if right_front_reflectance.reflectivity() > 50 and left_front_reflectance.reflectivity() > 50:
       return True
    return False
 
 def detectLeftReflecting():
-   if right_reflectance.reflectivity() < 50 and left_reflectance.reflectivity() > 50:
+   if right_front_reflectance.reflectivity() < 50 and left_front_reflectance.reflectivity() > 50:
       return True
    return False
 
 def turnByDegrees(direction, degrees, nextState):
     global current_state
-    imu.reset_rotation()
-    print("imu rotation reset")
+    # imu.reset_rotation()
+    # print("imu rotation reset")
 
     while True:
-      # print("target rotation: " + str(degrees))
+      print("target rotation: " + str(degrees))
+      print("actual rotation", imu.rotation())
+      print("tolerance: " + str(abs(abs(degrees))-abs(imu.rotation())))
       
-      if(abs(imu.rotation()) > abs(degrees)):
+      if(abs(abs(degrees)-abs(imu.rotation())) < 0.5):
         print("turn complete")
         left_motor.stop()
         right_motor.stop()
@@ -265,15 +282,23 @@ def turnByDegrees(direction, degrees, nextState):
         break
       else:
         print("actual rotation", imu.rotation())
-        
-        if(direction == "RIGHT"):
-          left_motor.spin(FORWARD, 150, RPM)
-          # right_motor.spin(REVERSE, 150, RPM)
-          right_motor.stop()
-        else:
-          left_motor.stop()
-          # left_motor.spin(REVERSE, 150, RPM)
-          right_motor.spin(FORWARD, 150, RPM)
+        # if turn is right, rotation is positive
+        # turn to 90, start at 0, so error is 90 - 0 = 90
+        # so left motor goes forward, right motor goes reverse 
+        error = degrees - imu.rotation()
+        kP = 4
+        left_motor.spin(FORWARD, 5+error * kP, RPM)
+        right_motor.spin(FORWARD, 5-error * kP, RPM)
+
+
+        # if(direction == "RIGHT"):
+        #   left_motor.spin(FORWARD, 150, RPM)
+        #   right_motor.spin(REVERSE, 150, RPM)
+        #   # right_motor.stop()
+        # else:
+        #   # left_motor.stop()
+        #   left_motor.spin(REVERSE, 150, RPM)
+        #   right_motor.spin(FORWARD, 150, RPM)
     # front_sonar_timer.clear()    
     print("state changing from " + str(current_state) + " to " + str(nextState))
     current_state = nextState
@@ -325,7 +350,7 @@ def trackDistanceTraveled(distance):
 while True:
     ## if enough cycles have passed without a detection, we've lost the object
     # if(checkForLostObject()): handleLostObject()
-    print("current state: " + str(current_state))
+    # print("current state: " + str(current_state))
 
     if(controller.buttonL2.pressing() and current_state != IDLE):
         print("emergency stop")
@@ -344,7 +369,7 @@ while True:
       # hopper_motor.stop()
     elif current_state == LINING_BY_DISTANCE:
       print("starting lining by distance")
-      while(not trackDistanceTraveled(20)):
+      while(not trackDistanceTraveled(5)):
         followLine("FORWARD")
         print("degrees: " + str(left_motor.position(DEGREES)))
         print("distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
@@ -356,7 +381,7 @@ while True:
     elif current_state == SEARCHING_FOR_FRUIT:
         pass
     elif current_state == DRIVING_TO_FRUIT:
-        if driveToFruit("lemon"): # once the object is close enough, start harvesting
+        if driveToFruit("lime"): # once the object is close enough, start harvesting
             setState(HARVESTING_FRUIT)
     elif current_state == HARVESTING_FRUIT:
         # lower the lift, this is kinda placeholder code until we get the actual lift mechanism & logic working
@@ -375,12 +400,34 @@ while True:
 
         
         right_motor.spin(REVERSE, 200, RPM)
-        left_motor.spin_for(REVERSE, 3, TURNS, 200, RPM)
+        left_motor.spin_for(REVERSE, 5, TURNS, 200, RPM)
         right_motor.stop()
 
         
-
         setState(TURNING_TO_BASKETS)
+    elif current_state == SQUARING_TO_WALL:
+      left_motor.spin(REVERSE, 50, RPM)
+      right_motor.spin_for(REVERSE, 5, TURNS, 50, RPM)
+      left_motor.stop()
+      setState(TURNING_TO_BASKETS)
+      pass
+    
     elif current_state == TURNING_TO_BASKETS:
-        turnByDegrees("RIGHT", 180, LINING_BY_DISTANCE)
+      left_motor.spin(REVERSE, 100, RPM)
+      right_motor.spin_for(REVERSE, 2, TURNS, 100, RPM)
+      left_motor.stop()
+      turnByDegrees("LEFT", 0, LINING_BY_ULTRASONIC)
         
+    elif current_state == LINING_BY_ULTRASONIC:
+      front_sonar_timer.clear()
+      while True:
+        if(front_sonar.distance(INCHES) < 2):
+          left_motor.stop()
+          right_motor.stop()
+          hopper_motor.spin_to_position(10)
+          setState(IDLE)
+        else:
+           followLine("FORWARD")
+          # followHeading("FORWARD")
+
+
