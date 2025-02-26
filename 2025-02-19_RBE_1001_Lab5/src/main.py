@@ -28,8 +28,14 @@ TURNING_TO_FRUIT = 7
 TURNING_TO_BASKETS = 8
 SQUARING_TO_WALL = 9
 LINING_BY_ULTRASONIC = 10
+LINING_BY_DISTANCE_SHORT = 11
+TURNING_TO_FRUIT_2 = 12
 
 current_state = IDLE
+
+total_harvests = 0
+
+
 
 # Define the motors
 left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
@@ -148,7 +154,9 @@ def driveToFruit(type):
       # lemons = camera.take_snapshot(Vision__LEMON)
       snapshot = camera.take_snapshot(Vision__LEMON)
 
+
     if(snapshot):
+      print("largerst object w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
       if(camera.largest_object().width > 40 and camera.largest_object().height > 40):
         object_x = camera.largest_object().centerX
         object_y = camera.largest_object().centerY
@@ -234,24 +242,38 @@ def encoderToInches(degrees):
   return degrees / (130.24367)
 
 
-def followLine(direction):
+def followLine(direction, side):
     # use right_front_reflectance and left_front_reflectance to follow the line
     # TRACING: 100 - 50 = 50, so robot is too far to the left
     # left motor gets 50 + 50*0.1 = 55
     # right motor gets 50 - 50*0.1 = 45
     # so robot should turn left
-    error = right_front_reflectance.reflectivity() - left_front_reflectance.reflectivity()
+    front_error = right_front_reflectance.reflectivity() - left_front_reflectance.reflectivity()
+    rear_error = right_back_reflectance.reflectivity() - left_back_reflectance.reflectivity()
     # print("error: " + str(error))
     base_speed_RPM = 100 # 100
     kP = 1 # 1
-    if direction == "REVERSE":
-      left_motor.spin(REVERSE, base_speed_RPM + error * kP, RPM)
-      right_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
+    if side == "FRONT":
+      if direction == "REVERSE":
+          left_motor.spin(REVERSE, base_speed_RPM + front_error * kP, RPM)
+          right_motor.spin(REVERSE, base_speed_RPM - front_error * kP, RPM)
+      else:
+        left_motor.spin(FORWARD, base_speed_RPM - front_error * kP, RPM)
+        # print("left: " + str(base_speed_RPM - error * kP))
+        right_motor.spin(FORWARD, base_speed_RPM + front_error * kP, RPM)
+        # print("right: " + str(base_speed_RPM + error * kP))
     else:
-      left_motor.spin(FORWARD, base_speed_RPM - error * kP, RPM)
-      # print("left: " + str(base_speed_RPM - error * kP))
-      right_motor.spin(FORWARD, base_speed_RPM + error * kP, RPM)
-      # print("right: " + str(base_speed_RPM + error * kP))
+      print("rear error: " + str(rear_error))
+      print("rear left: " + str(left_back_reflectance.reflectivity()))
+      print("rear right: " + str(right_back_reflectance.reflectivity()))
+      if direction == "REVERSE":
+        left_motor.spin(REVERSE, base_speed_RPM + rear_error * kP, RPM)
+        right_motor.spin(REVERSE, base_speed_RPM - rear_error * kP, RPM)
+      else:
+        left_motor.spin(FORWARD, base_speed_RPM + rear_error * kP, RPM)
+        # print("left: " + str(base_speed_RPM - error * kP))
+        right_motor.spin(FORWARD, base_speed_RPM - rear_error * kP, RPM)
+        # print("right: " + str(base_speed_RPM + error * kP))
 
 
 def detectBothReflecting(): # i.e. detect the line
@@ -325,8 +347,8 @@ def goDistance(direction, distance, nextState):
     left_motor.reset_position()
     right_motor.reset_position()
     while True:
-      # print("left motor: " + str(left_motor.position()))
-      # print("left motor inches: " + str(encoderToInches(left_motor.position())))
+      print("left motor: " + str(left_motor.position()))
+      print("left motor inches: " + str(encoderToInches(left_motor.position())))
 
       followHeading(direction)
       
@@ -360,6 +382,8 @@ while True:
     brain.screen.new_line()
     brain.screen.print("rotation " + str(imu.rotation()))
     brain.screen.new_line()
+    brain.screen.print("total harvests " + str(total_harvests))
+    brain.screen.new_line()
     brain.screen.set_cursor(1, 1)
 
     if current_state == IDLE:
@@ -367,22 +391,28 @@ while True:
       right_motor.stop()
       lift_motor.stop()
       # hopper_motor.stop()
+      
     elif current_state == LINING_BY_DISTANCE:
       print("starting lining by distance")
-      while(not trackDistanceTraveled(5)):
-        followLine("FORWARD")
+      while(not trackDistanceTraveled(20)):
+        followLine("FORWARD", "FRONT")
         print("degrees: " + str(left_motor.position(DEGREES)))
         print("distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
       setState(TURNING_TO_FRUIT)
+
     elif current_state == TURNING_TO_FRUIT:
         turnByDegrees("RIGHT", 90, DRIVING_TO_FRUIT)
+    
     elif current_state == LINING_BY_LINE:
        pass
+    
     elif current_state == SEARCHING_FOR_FRUIT:
         pass
+
     elif current_state == DRIVING_TO_FRUIT:
-        if driveToFruit("lime"): # once the object is close enough, start harvesting
+        if driveToFruit("lemon"): # once the object is close enough, start harvesting
             setState(HARVESTING_FRUIT)
+
     elif current_state == HARVESTING_FRUIT:
         # lower the lift, this is kinda placeholder code until we get the actual lift mechanism & logic working
         left_motor.stop()
@@ -400,23 +430,28 @@ while True:
 
         
         right_motor.spin(REVERSE, 200, RPM)
+        lift_motor.spin(FORWARD, 100, RPM)
         left_motor.spin_for(REVERSE, 5, TURNS, 200, RPM)
         right_motor.stop()
 
-        
-        setState(TURNING_TO_BASKETS)
-    elif current_state == SQUARING_TO_WALL:
-      left_motor.spin(REVERSE, 50, RPM)
-      right_motor.spin_for(REVERSE, 5, TURNS, 50, RPM)
-      left_motor.stop()
-      setState(TURNING_TO_BASKETS)
-      pass
-    
+        total_harvests += 1
+
+        if(total_harvests == 1):
+          setState(TURNING_TO_FRUIT_2)
+        if(total_harvests == 2):
+          setState(TURNING_TO_BASKETS)
+          
     elif current_state == TURNING_TO_BASKETS:
       left_motor.spin(REVERSE, 100, RPM)
       right_motor.spin_for(REVERSE, 2, TURNS, 100, RPM)
       left_motor.stop()
-      turnByDegrees("LEFT", 0, LINING_BY_ULTRASONIC)
+      turnByDegrees("LEFT", 180, LINING_BY_ULTRASONIC)
+
+    elif current_state == TURNING_TO_FRUIT_2:
+      left_motor.spin(REVERSE, 100, RPM)
+      right_motor.spin_for(REVERSE, 2, TURNS, 100, RPM)
+      left_motor.stop()
+      turnByDegrees("LEFT", 0, LINING_BY_DISTANCE_SHORT)
         
     elif current_state == LINING_BY_ULTRASONIC:
       front_sonar_timer.clear()
@@ -427,7 +462,17 @@ while True:
           hopper_motor.spin_to_position(10)
           setState(IDLE)
         else:
-           followLine("FORWARD")
+           followLine("FORWARD", "FRONT")
           # followHeading("FORWARD")
 
+    elif current_state == LINING_BY_DISTANCE_SHORT:  
+      print("starting lining by distance")
+      while(not trackDistanceTraveled(5)):
+        followLine("FORWARD", "FRONT")
+        print("degrees: " + str(left_motor.position(DEGREES)))
+        print("distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+      setState(TURNING_TO_FRUIT)
+
+    elif current_state == TURNING_TO_FRUIT_2:
+        turnByDegrees("RIGHT", 90, DRIVING_TO_FRUIT)
 
