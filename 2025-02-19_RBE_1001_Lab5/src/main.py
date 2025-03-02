@@ -33,13 +33,10 @@ hopper_motor.spin_to_position(75)
 left_back_bumper = Bumper(brain.three_wire_port.h)
 right_back_bumper = Bumper(brain.three_wire_port.g)
 
-## Define the camera (vision)
-## Note that we define the signatures first and then pass them to the Vision constructor --
-## I don't know if that is truly needed or not
+## Define the camera
 Vision__LIME = Signature (1, -6069, -4855, -5462, -3131, -2407, -2769, 3.900, 0)
 Vision__LEMON = Signature (2, 131, 425, 278, -3915, -3429, -3672, 7.400, 0)
 Vision__ORANGUTAN = Signature (3, 5323, 6263, 5793, -2717, -2111, -2414, 5.9, 0)
-# Vision__DRAGONFRUIT = Signature (4, 5231, 5733, 5482, 2935, 3963, 3449, 10, 0)
 
 camera = Vision (Ports.PORT7, 50, Vision__LEMON, Vision__LIME, Vision__ORANGUTAN)
 
@@ -57,7 +54,9 @@ imu = Inertial(Ports.PORT6)
 
 # calibrate imu
 imu.calibrate()
-# wait 2 seconds for imu to calibrate
+while imu.is_calibrating(): # wait 2 seconds for imu to calibrate
+    print("Calibrating IMU...")
+    wait(100)  # wait 100ms to avoid flooding the console
 
 imu.reset_rotation()
 
@@ -419,17 +418,17 @@ autonomous_steps = [
 
 
 def printTelemetryToBrain():  
-  brain.screen.print("current step " + str(current_step))
-  brain.screen.new_line()
-  brain.screen.print("rotation " + str(imu.rotation()))
-  brain.screen.new_line()
-  brain.screen.set_cursor(1, 1)
+    brain.screen.print("current step " + str(current_step))
+    brain.screen.new_line()
+    brain.screen.print("rotation " + str(imu.rotation()))
+    brain.screen.new_line()
+    brain.screen.set_cursor(1, 1)
 
 ## Our main loop
 while True:
     printTelemetryToBrain()
     
-  # Execute autonomous sequence with emergency override
+    # Execute autonomous sequence with emergency override
     while current_step < len(autonomous_steps):
         printTelemetryToBrain()
         if controller.buttonX.pressing():  # Emergency stop check before running each step
@@ -445,6 +444,7 @@ while True:
 
         current_step += 1  # Move to the next step
     else:
+        printTelemetryToBrain()
         print("Waiting for commands... ") 
         if (controller.buttonL1.pressing() and not imu.is_calibrating()):
             current_step = 0
