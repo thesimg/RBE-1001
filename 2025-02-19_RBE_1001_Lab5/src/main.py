@@ -16,27 +16,7 @@ brain = Brain()
 
 controller = Controller()
 
-## Define states and state variable
-IDLE = 0
-SEARCHING_FOR_FRUIT = 1
-DRIVING_TO_FRUIT = 2
-HARVESTING_FRUIT = 3
-LINING_BY_DISTANCE = 4
-LINING_BY_LINE = 5
-TURNING_TO_HEADING = 6
-TURNING_TO_FRUIT = 7
-TURNING_TO_BASKETS = 8
-SQUARING_TO_WALL = 9
-LINING_BY_ULTRASONIC = 10
-LINING_BY_DISTANCE_SHORT = 11
-TURNING_TO_FRUIT_2 = 12
-
-current_state = IDLE
-
 current_step = 10000
-
-total_harvests = 0
-
 
 # Define the motors
 left_motor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
@@ -80,61 +60,6 @@ imu.calibrate()
 # wait 2 seconds for imu to calibrate
 
 imu.reset_rotation()
-
-# utilities
-def setState(newState):
-    global current_state
-    if(not imu.is_calibrating()):
-      print("State changed from " + str(current_state) + " to " + str(newState))
-      current_state = newState
-    else:
-      print("imu is calibrating, not changing state")
-
-lemonViews = 0
-dragonfruitViews = 0
-bothViews = 0
-overallTrials = 0
-
-def checkForFruit():
-    seesLemon = False
-    seesDragonfruit = False
-    global lemonViews
-    global dragonfruitViews
-    global bothViews
-    global overallTrials
-
-    lemons = camera.take_snapshot(Vision__LEMON)
-    # limes = camera.take_snapshot(Vision__LIME)
-    # orangutans = camera.take_snapshot(Vision__ORANGUTAN)
-    # dragonfruits = camera.take_snapshot(Vision__DRAGONFRUIT)
-
-    # print("largest object x:", camera.largest_object().centerX, "  y: ", camera.largest_object().centerY, "  w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
-
-    if(lemons and camera.largest_object().width > 30):
-        # print("count: " + str(camera.object_count))
-        # print("largest object x:", camera.largest_object().centerX, "  y: ", camera.largest_object().centerY, "  w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
-        # print("Dragonfruit detected")
-        seesDragonfruit = True
-    
-    lemons = camera.take_snapshot(Vision__LEMON)
-
-    if(lemons and camera.largest_object().width > 30):
-        # print("count: " + str(camera.object_count))
-        # print("largest object x:", camera.largest_object().centerX, "  y: ", camera.largest_object().centerY, "  w: ", camera.largest_object().width, "  h: ", camera.largest_object().height)
-        # print("Lemon detected")
-        seesLemon = True
-
-    if(seesLemon and seesDragonfruit):
-        bothViews += 1
-        print("Both fruits detected, " + str(bothViews) + " times")
-    elif(seesLemon):
-        lemonViews += 1
-        print("Only Lemon detected, " + str(lemonViews) + " times")
-    elif(seesDragonfruit):
-        dragonfruitViews += 1
-        print("Only Dragonfruit detected, " + str(dragonfruitViews) + " times")
-    overallTrials += 1
-    print("Overall trials: " + str(overallTrials))
 
 def restartProgram():
     right_motor.stop()
@@ -183,7 +108,7 @@ def driveToFruit(type):
             left_power = left_drive_power - left_turn_power
             right_power = right_drive_power - right_turn_power
 
-            print("Height: {}, Left Power: {}, Right Power: {}".format(object_height, left_power, right_power))
+            print("Height: " + str(object_height) + "Left Power: " + str(left_power) + "Right Power: " + str(right_power))
 
             left_motor.spin(REVERSE, left_power, PERCENT)
             right_motor.spin(REVERSE, right_power, PERCENT)
@@ -198,7 +123,7 @@ def driveToFruit(type):
             lift_power = kP_lift * y_error
             lift_motor.spin(FORWARD, lift_power, PERCENT)
 
-            # print(f"Object Y: {object_y}, Lift Power: {lift_power}")
+            print("Object Y: " + str(object_y) + "Lift Power: " + str(lift_power))
 
             # Stop when the object is close enough and centered
             if object_height > 120 and abs(x_error) < 5:
@@ -269,7 +194,7 @@ def turnByDegrees(degrees):
     # print("IMU rotation reset")
 
     while True:
-        # print(f"Target Rotation: {degrees}, Actual Rotation: {imu.rotation()}")
+        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
         
         if abs(degrees - imu.rotation()) < 0.5:
             print("Turn complete")
@@ -290,7 +215,7 @@ def turnToCardinal():
     # print("IMU rotation reset")
 
     while True:
-        # print(f"Target Rotation: {degrees}, Actual Rotation: {imu.rotation()}")
+        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
         degrees = round(imu.rotation() / 90) * 90
         print(degrees)
         if abs(degrees - imu.rotation()) < 0.5:
@@ -327,7 +252,7 @@ def goDistance(direction, distance):
     right_motor.reset_position()
 
     while encoderToInches(left_motor.position()) < distance:
-        # print(f"Distance Traveled: {encoderToInches(left_motor.position())} inches")
+        print("Distance Traveled: " + str(encoderToInches(left_motor.position())) + "inches")
         followHeading(direction)
 
     left_motor.stop()
@@ -339,8 +264,6 @@ def trackDistanceTraveled(distance):
     Returns True if the robot has traveled the specified distance.
     """
     return encoderToInches(abs(left_motor.position(DEGREES))) > distance
-
-
 
 def followLineWithIMU(direction, side):
     """
@@ -361,30 +284,7 @@ def followLineWithIMU(direction, side):
     # left_motor_power = front_left_motor_power + rear_left_motor_power
     # right_motor_power = front_right_motor_power + rear_right_motor_power
 
-    # if side == "FRONT":
-    #     if direction == "REVERSE":
-    #         left_motor.spin(REVERSE, base_speed_RPM + front_error * kP, RPM)
-    #         right_motor.spin(REVERSE, base_speed_RPM - front_error * kP, RPM)
-    #     else:
-    #         left_motor.spin(FORWARD, base_speed_RPM - front_error * kP, RPM)
-    #         right_motor.spin(FORWARD, base_speed_RPM + front_error * kP, RPM)
-    # else:
-    #     if direction == "REVERSE":
-    #         left_motor.spin(REVERSE, base_speed_RPM + rear_error * kP, RPM)
-    #         right_motor.spin(REVERSE, base_speed_RPM - rear_error * kP, RPM)
-    #     else:
-    #         left_motor.spin(FORWARD, base_speed_RPM + rear_error * kP, RPM)
-    #         right_motor.spin(FORWARD, base_speed_RPM - rear_error * kP, RPM)
-    
-
-    # turningWithIMU = False
     degrees = round(imu.rotation() / 90) * 90
-    # print(degrees)
-    # if abs(degrees - imu.rotation()) < 0.5:
-    #     turningWithIMU = False
-    # else:
-    #     turningWithIMU = True
-
     error = degrees - imu.rotation()
     print(error)
     kP = 6
@@ -394,37 +294,7 @@ def followLineWithIMU(direction, side):
 
     left_motor.spin(FORWARD, front_left_motor_power + left_motor_IMU_power, RPM)
     right_motor.spin(FORWARD, front_right_motor_power + right_motor_IMU_power, RPM)
-
-    # if(abs(front_error) > 5):
-    #     left_motor.spin(FORWARD, front_left_motor_power, RPM)
-    #     right_motor.spin(FORWARD, front_right_motor_power, RPM)
-    #     print("correcting with front error: " + str(front_error))
-    # else:
-    #     # if(abs(rear_error) < 10):
-    #     if(abs(rear_error) > 5):
-    #         left_motor.spin(FORWARD, front_left_motor_power + left_motor_IMU_power, RPM)
-    #         right_motor.spin(FORWARD, front_right_motor_power + right_motor_IMU_power, RPM)
-    #         print("correcting with rear error: " + str(rear_error))
-    #     else:
-    #         left_motor.spin(FORWARD, front_left_motor_power, RPM)
-    #         right_motor.spin(FORWARD, front_right_motor_power, RPM)
-        # else:
-        #     # turnByDegrees(imu.rotation() - ((imu.rotation() + 45) % 90))
-        #     turnByDegrees(imu.rotation() - ((imu.rotation() + 45) // 90 * 90))
-        #     print("correcting with IMU error: " + str(imu.rotation() - ((imu.rotation() + 45) // 90 * 90)))
-        #     print("front error: " + str(front_error))
-        #     print("rear error: " + str(rear_error))
-            # 190-(190%90) = 190 - 10   
-            # 20 - (20 % 90) = 20 - 20 = 0
-            # 70 - (70 % 90) = 70-70 = 0
-
-
-
-
     
-    
-
-
 
 ## STEP DEFINITIONS
 
@@ -436,24 +306,24 @@ def idle():
     print("Robot is idle.")
 
 def lining_by_distance(distance):
-    # print(f"Starting lining by distance: {distance} inches")
+    print("Starting lining by distance: " + str(distance) + "inches")
     while not trackDistanceTraveled(distance):
         followLine("FORWARD", "FRONT")
-        # print(f"Degrees: {left_motor.position(DEGREES)}")
-        # print(f"Distance traveled: {encoderToInches(left_motor.position(DEGREES))}")
+        print("Degrees: " + str(left_motor.position(DEGREES)))
+        print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
     return True  # Step completed successfully
 
 def lining_by_distance_with_IMU(distance):
-    # print(f"Starting lining by distance: {distance} inches")
+    print("Starting lining by distance: " + str(distance) + "inches")
     left_motor.reset_position()
     while not trackDistanceTraveled(distance):
         followLineWithIMU("FORWARD", "FRONT")
-        # print(f"Degrees: {left_motor.position(DEGREES)}")
-        # print(f"Distance traveled: {encoderToInches(left_motor.position(DEGREES))}")
+        print("Degrees: " + str(left_motor.position(DEGREES)))
+        print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
     return True  # Step completed successfully
 
 def turning(angle):
-    # print(f"Turning {direction} by {angle} degrees")
+    print("Turning by " + str(angle) + " degrees")
     turnByDegrees(angle)
     return True  # Step completed successfully
 
@@ -480,8 +350,6 @@ def harvesting_fruit():
     lift_motor.stop()
     right_motor.stop()
 
-    global total_harvests
-    total_harvests += 1
     return True  # Step completed successfully
 
 def lining_by_ultrasonic(threshold):
@@ -555,8 +423,6 @@ def printTelemetryToBrain():
   brain.screen.new_line()
   brain.screen.print("rotation " + str(imu.rotation()))
   brain.screen.new_line()
-  brain.screen.print("total harvests " + str(total_harvests))
-  brain.screen.new_line()
   brain.screen.set_cursor(1, 1)
 
 ## Our main loop
@@ -583,41 +449,3 @@ while True:
         if (controller.buttonL1.pressing() and not imu.is_calibrating()):
             current_step = 0
             print("Resetting to step 0")
-
-    # degrees = (imu.rotation() - ((imu.rotation() + 45) // 90 * 90))
-    # degrees = imu.rotation() - ((imu.rotation()) % 90)
-
-
-
-
-# 
-#     if current_step == 1: # lining by distance to before first tree
-#       pass
-#     elif current_step == 2: # turn to tree
-#       pass
-#     elif current_step == 3: # find/drive to fruit
-#       pass
-#     elif current_step == 4: # harvest fruit
-#       pass
-#     elif current_step == 5: # back up and square to wall
-#       pass
-#     elif current_step == 6: # turn to drive along line again, then turn to second fruit
-#       pass
-#     elif current_step == 7: # drive to second fruit
-#       pass
-#     elif current_step == 8: # harvest second fruit
-#       pass
-#     elif current_step == 9: # back up and square to wall
-#       pass
-#     elif current_step == 10: # turn to line to baskets
-#       pass
-#     elif current_step == 11: # lining by ultrasonic
-#       pass
-#     elif current_step == 12: # turn to baskets
-#       pass
-#     elif current_step == 13: # drive to baskets and dump fruit
-#       pass
-#     elif current_step == 14:
-#       pass
-#     elif current_step == 15:
-#         pass   
