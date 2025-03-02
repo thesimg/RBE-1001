@@ -214,13 +214,13 @@ def turnToCardinal():
     # print("IMU rotation reset")
 
     while True:
-        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
         degrees = round(imu.rotation() / 90) * 90
-        print(degrees)
+        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
         if abs(degrees - imu.rotation()) < 0.5:
             print("Turn complete")
             left_motor.stop()
             right_motor.stop()
+            return True
             
         error = degrees - imu.rotation()
         print(error)
@@ -303,9 +303,11 @@ def idle():
     right_motor.stop()
     lift_motor.stop()
     print("Robot is idle.")
+    return "IDLE"  # Return value to signify idle state
 
 def lining_by_distance(distance):
     print("Starting lining by distance: " + str(distance) + "inches")
+    left_motor.reset_position()  # Reset position counter
     while not trackDistanceTraveled(distance):
         followLine("FORWARD", "FRONT")
         print("Degrees: " + str(left_motor.position(DEGREES)))
@@ -328,7 +330,7 @@ def turning(angle):
 
 def driving_to_fruit(fruit_type):
     while not driveToFruit(fruit_type):
-      return False
+        pass  # Keep trying until successful
     return True  # Step completed successfully
 
 def harvesting_fruit():
@@ -353,28 +355,23 @@ def harvesting_fruit():
 
 def lining_by_ultrasonic(threshold):
     front_sonar_timer.clear()
-    while True:
-        if controller.buttonX.pressing():  # Emergency override check
-            idle()
-            return False
-        if front_sonar.distance(INCHES) < threshold:
-            left_motor.stop()
-            right_motor.stop()
-            hopper_motor.spin_to_position(10)
-            return True  # Step completed successfully
-        else:
-            followLine("FORWARD", "FRONT")
+    while front_sonar.distance(INCHES) >= threshold:
+        followLine("FORWARD", "FRONT")
+    
+    left_motor.stop()
+    right_motor.stop()
+    hopper_motor.spin_to_position(10)
+    return True  # Step completed successfully
 
 def lining_by_ultrasonic_with_IMU(threshold):
     front_sonar_timer.clear()
-    while True:
-        if front_sonar.distance(INCHES) < threshold:
-            left_motor.stop()
-            right_motor.stop()
-            hopper_motor.spin_to_position(10)
-            return True  # Step completed successfully
-        else:
-            followLineWithIMU("FORWARD", "FRONT")
+    while front_sonar.distance(INCHES) >= threshold:
+        followLineWithIMU("FORWARD", "FRONT")
+    
+    left_motor.stop()
+    right_motor.stop()
+    hopper_motor.spin_to_position(10)
+    return True  # Step completed successfully
 
 def square_to_wall():
     while True:
@@ -411,11 +408,12 @@ autonomous_steps = [
     (turning, [180]),  # Turn 180 degrees
     (lining_by_ultrasonic, [5])  # Stop when ultrasonic sensor detects an object at 2 inches
     
-    
     # (lining_by_distance_with_IMU, [2225]),  # Move 5 inches forward
     # (turning, [(imu.rotation() - ((imu.rotation() + 45) // 90 * 90))])
 ]
 
+# Define state constants
+IDLE = "IDLE"  # Define IDLE constant
 
 def printTelemetryToBrain():  
     brain.screen.print("current step " + str(current_step))
@@ -428,24 +426,31 @@ def printTelemetryToBrain():
 while True:
     printTelemetryToBrain()
     
-    # Execute autonomous sequence with emergency override
-    while current_step < len(autonomous_steps):
+    # Check for emergency stop first
+    if controller.buttonX.pressing():
+        print("ESTOPPED, going to idle.")
+        idle()
+        # Continue the main loop, which will restart from the top
+        continue
+    
+    # Execute autonomous sequence
+    if current_step < len(autonomous_steps):
         printTelemetryToBrain()
-        if controller.buttonX.pressing():  # Emergency stop check before running each step
-            print("ESTOPPED, going to idle.")
-            idle()
-            break
-
+        
         step_function, args = autonomous_steps[current_step]
         success = step_function(*args)
-
-        if not success:  # If a function returns False (e.g., emergency stop), exit loop
-            break
-
-        current_step += 1  # Move to the next step
+        
+        if success == IDLE:  # Check if we need to go to idle state
+            print("Entering IDLE state.")
+            continue
+        elif success:  # If step completed successfully
+            current_step += 1  # Move to the next step
+        else:
+            # Handle failure in a non-emergency way if needed
+            print("Step failed, retrying.")
     else:
         printTelemetryToBrain()
-        print("Waiting for commands... ") 
+        print("Waiting for commands... ")
         if (controller.buttonL1.pressing() and not imu.is_calibrating()):
             current_step = 0
             print("Resetting to step 0")
