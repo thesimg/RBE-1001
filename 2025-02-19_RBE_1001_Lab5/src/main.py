@@ -177,7 +177,7 @@ def detectBothReflecting():
     """
     Returns True if both front reflectance sensors detect the line.
     """
-    return right_front_reflectance.reflectivity() > 50 and left_front_reflectance.reflectivity() > 50
+    return right_front_reflectance.reflectivity() > 70 and left_front_reflectance.reflectivity() > 70
 
 def detectLeftReflecting():
     """
@@ -224,14 +224,16 @@ def turnByDegreesFromWall(degrees):
             return True
 
         error = degrees - imu.rotation()
-        kP = 4
-        turnBoost = 1.75
+        kP = 6
+        baseFeedforwardRPM = 30
+        turnBoost = 3
+        turnReduce = 1
         if(error > 0):
-            left_motor.spin(FORWARD, 5 + error * kP * turnBoost, RPM)
-            right_motor.spin(FORWARD, 5 - error * kP, RPM)
+            left_motor.spin(FORWARD, baseFeedforwardRPM + error * kP * turnBoost, RPM)
+            right_motor.spin(FORWARD, baseFeedforwardRPM - error * kP * turnReduce, RPM)
         else:
-            left_motor.spin(FORWARD, 5 + error * kP, RPM)
-            right_motor.spin(FORWARD, 5 - error * kP * turnBoost, RPM)
+            left_motor.spin(FORWARD, baseFeedforwardRPM + error * kP * turnReduce, RPM)
+            right_motor.spin(FORWARD, baseFeedforwardRPM - error * kP * turnBoost, RPM)
         
 def turnToCardinal():
     """
@@ -255,14 +257,18 @@ def turnToCardinal():
         left_motor.spin(FORWARD, 10 + error * kP, RPM)
         right_motor.spin(FORWARD, 10 - error * kP, RPM)
 
-def followHeading(direction):
+def followHeading(direction, targetHeading):
     """
     Adjusts driving to maintain a straight heading using the IMU.
     """
-    error = imu.rotation()
+    error = targetHeading - imu.rotation()
     kP = 12.5
     base_speed_RPM = 200
 
+    print("Target Rotation: " + str(targetHeading) + "Actual Rotation: " + str(imu.rotation()))
+    print("Error: " + str(error))
+    
+    
     if direction == "REVERSE":
         left_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
         right_motor.spin(REVERSE, base_speed_RPM + error * kP, RPM)
@@ -270,7 +276,7 @@ def followHeading(direction):
         left_motor.spin(FORWARD, base_speed_RPM - error * kP, RPM)
         right_motor.spin(FORWARD, base_speed_RPM + error * kP, RPM)
 
-def goDistance(direction, distance):
+def goDistance(direction, distance, orientation):
     """
     Drives a specified distance while maintaining heading.
     """
@@ -279,7 +285,7 @@ def goDistance(direction, distance):
 
     while encoderToInches(left_motor.position()) < distance:
         print("Distance Traveled: " + str(encoderToInches(left_motor.position())) + "inches")
-        followHeading(direction)
+        followHeading(direction, orientation)
 
     left_motor.stop()
     right_motor.stop()
@@ -348,6 +354,8 @@ def lining_by_distance_with_IMU(distance):
         followLineWithIMU()
         print("Degrees: " + str(left_motor.position(DEGREES)))
         print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+    left_motor.stop()
+    right_motor.stop()
     return True  # Step completed successfully
 
 def turning(angle):
@@ -397,6 +405,8 @@ def harvesting_fruit():
 
 def lining_by_ultrasonic_with_IMU(threshold):
     front_sonar_timer.clear()
+    print("Starting lining by ultrasonic: " + str(threshold) + "inches")
+    print("Distance: " + str(front_sonar.distance(INCHES)))
     while front_sonar.distance(INCHES) >= threshold:
         followLineWithIMU()
     
@@ -421,6 +431,19 @@ def deposit_fruit():
     right_motor.spin(REVERSE, 200, RPM)
     left_motor.spin_for(REVERSE, 1, TURNS, 200, RPM)
     right_motor.stop()
+    return True  # Step completed successfully
+
+def driving_to_line(targetHeading):
+    left_motor.reset_position()
+    print("driving to line")
+    print("right front reflectance: " + str(right_front_reflectance.reflectivity()))
+    print("left front reflectance: " + str(left_front_reflectance.reflectivity()))
+    while not detectBothReflecting():
+        followHeading("FORWARD", targetHeading)
+        print("Degrees: " + str(left_motor.position(DEGREES)))
+        print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+    right_motor.stop()
+    left_motor.stop()
     return True  # Step completed successfully
 
 # Define step sequence with parameters
@@ -453,7 +476,20 @@ autonomous_steps = [
     (deposit_fruit, []),  # Move to deposit fruit
     
     (turning, [270]),  # Turn 90 degrees right
+    (driving_to_line, [270]),  # Drive to line
+    (turning, [360]),  # Turn 90 degrees right   
+    (square_to_wall, []),  # Square to wall
+   
+   
+    # TESTING
     
+    # (turning, [270]),  # Turn 90 degrees right
+    # (driving_to_line, [270]),  # Drive to line
+    
+    # (lining_by_distance_with_IMU, [5]),  # Move 20 inches forward
+    # (turning_from_wall, [90]),  # Turn 90 degrees right
+    # (square_to_wall, []),  # Square to wall
+    # (lining_by_distance_with_IMU, [5]),  # Move 20 inches forward
     
     # (lining_by_distance_with_IMU, [2225]),  # Move 5 inches forward
     # (turning, [(imu.rotation() - ((imu.rotation() + 45) // 90 * 90))])
@@ -466,6 +502,18 @@ def printTelemetryToBrain():
     brain.screen.print("current step " + str(current_step))
     brain.screen.new_line()
     brain.screen.print("rotation " + str(imu.rotation()))
+    brain.screen.new_line()
+    brain.screen.print("right fron reflectance " + str(right_front_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left front reflectance " + str(left_front_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("right back reflectance " + str(right_back_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left back reflectance " + str(left_back_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left bumper " + str(left_back_bumper.pressing()))
+    brain.screen.new_line()
+    brain.screen.print("right bumper " + str(right_back_bumper.pressing()))
     brain.screen.new_line()
     brain.screen.set_cursor(1, 1)
 
