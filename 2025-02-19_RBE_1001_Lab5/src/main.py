@@ -206,6 +206,33 @@ def turnByDegrees(degrees):
         left_motor.spin(FORWARD, 5 + error * kP, RPM)
         right_motor.spin(FORWARD, 5 - error * kP, RPM)
         
+        
+def turnByDegreesFromWall(degrees):
+    """
+    Uses the IMU to turn the robot by a specified number of degrees.
+    """
+    # imu.reset_rotation()
+    # print("IMU rotation reset")
+
+    while True:
+        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
+        
+        if abs(degrees - imu.rotation()) < 0.5:
+            print("Turn complete")
+            left_motor.stop()
+            right_motor.stop()
+            return True
+
+        error = degrees - imu.rotation()
+        kP = 4
+        turnBoost = 1.75
+        if(error > 0):
+            left_motor.spin(FORWARD, 5 + error * kP * turnBoost, RPM)
+            right_motor.spin(FORWARD, 5 - error * kP, RPM)
+        else:
+            left_motor.spin(FORWARD, 5 + error * kP, RPM)
+            right_motor.spin(FORWARD, 5 - error * kP * turnBoost, RPM)
+        
 def turnToCardinal():
     """
     Uses the IMU to turn the robot by a specified number of degrees.
@@ -264,14 +291,14 @@ def trackDistanceTraveled(distance):
     """
     return encoderToInches(abs(left_motor.position(DEGREES))) > distance
 
-def followLineWithIMU(direction, side):
+def followLineWithIMU():
     """
     Uses the reflectance sensors to follow a line, adjusting motor speeds accordingly.
     """
     front_error = right_front_reflectance.reflectivity() - left_front_reflectance.reflectivity()
     rear_error = right_back_reflectance.reflectivity() - left_back_reflectance.reflectivity()
     
-    base_speed_RPM = 100
+    base_speed_RPM = 150
     front_kP = 0.5
     back_kP = 0.1
 
@@ -318,7 +345,7 @@ def lining_by_distance_with_IMU(distance):
     print("Starting lining by distance: " + str(distance) + "inches")
     left_motor.reset_position()
     while not trackDistanceTraveled(distance):
-        followLineWithIMU("FORWARD", "FRONT")
+        followLineWithIMU()
         print("Degrees: " + str(left_motor.position(DEGREES)))
         print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
     return True  # Step completed successfully
@@ -326,6 +353,11 @@ def lining_by_distance_with_IMU(distance):
 def turning(angle):
     print("Turning by " + str(angle) + " degrees")
     turnByDegrees(angle)
+    return True  # Step completed successfully
+
+def turning_from_wall(angle):
+    print("Turning by " + str(angle) + " degrees")
+    turnByDegreesFromWall(angle)
     return True  # Step completed successfully
 
 def driving_to_fruit(fruit_type):
@@ -346,31 +378,30 @@ def harvesting_fruit():
     
     lift_motor.spin_for(REVERSE, 1.5, TURNS, 50, RPM)
     right_motor.spin(REVERSE, 200, RPM)
-    lift_motor.spin(FORWARD, 10, RPM)
+    lift_motor.spin(FORWARD, 100, RPM)
     left_motor.spin_for(REVERSE, 5, TURNS, 200, RPM)
     lift_motor.stop()
     right_motor.stop()
 
     return True  # Step completed successfully
 
-def lining_by_ultrasonic(threshold):
-    front_sonar_timer.clear()
-    while front_sonar.distance(INCHES) >= threshold:
-        followLine("FORWARD", "FRONT")
+# def lining_by_ultrasonic(threshold):
+#     front_sonar_timer.clear()
+#     while front_sonar.distance(INCHES) >= threshold:
+#         followLine("FORWARD", "FRONT")
     
-    left_motor.stop()
-    right_motor.stop()
-    hopper_motor.spin_to_position(10)
-    return True  # Step completed successfully
+#     left_motor.stop()
+#     right_motor.stop()
+#     # hopper_motor.spin_to_position(10)
+#     return True  # Step completed successfully
 
 def lining_by_ultrasonic_with_IMU(threshold):
     front_sonar_timer.clear()
     while front_sonar.distance(INCHES) >= threshold:
-        followLineWithIMU("FORWARD", "FRONT")
+        followLineWithIMU()
     
     left_motor.stop()
     right_motor.stop()
-    hopper_motor.spin_to_position(10)
     return True  # Step completed successfully
 
 def square_to_wall():
@@ -385,28 +416,44 @@ def square_to_wall():
             print("Squared to wall")
             return True
 
+def deposit_fruit():
+    hopper_motor.spin_to_position(10)
+    right_motor.spin(REVERSE, 200, RPM)
+    left_motor.spin_for(REVERSE, 1, TURNS, 200, RPM)
+    right_motor.stop()
+    return True  # Step completed successfully
+
 # Define step sequence with parameters
 autonomous_steps = [
-    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
-    (turning, [90]),  # Turn 90 degrees right
-    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (lining_by_distance_with_IMU, [26]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
     (harvesting_fruit, []),  # Harvest fruit
     
     (turning, [90]),  # Turn 180 degrees
     (square_to_wall, []),  # Square to wall
     
-    (turning, [0]),  # Turn 180 degrees
+    (turning_from_wall, [0]),  # Turn 180 degrees
 
     (lining_by_distance_with_IMU, [10]),  # Move 20 inches forward
-    (turning, [90]),  # Turn 90 degrees right
-    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
     (harvesting_fruit, []),  # Harvest fruit
 
     (turning, [90]),  # Turn 180 degrees
     (square_to_wall, []),  # Square to wall
     
-    (turning, [180]),  # Turn 180 degrees
-    (lining_by_ultrasonic, [5])  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    
+    (turning, [90]),  # Turn 180 degrees
+    (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
+    (deposit_fruit, []),  # Move to deposit fruit
+    
+    (turning, [270]),  # Turn 90 degrees right
+    
     
     # (lining_by_distance_with_IMU, [2225]),  # Move 5 inches forward
     # (turning, [(imu.rotation() - ((imu.rotation() + 45) // 90 * 90))])
