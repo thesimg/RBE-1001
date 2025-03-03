@@ -177,7 +177,7 @@ def detectBothReflecting():
     """
     Returns True if both front reflectance sensors detect the line.
     """
-    return right_front_reflectance.reflectivity() > 50 and left_front_reflectance.reflectivity() > 50
+    return right_front_reflectance.reflectivity() > 70 and left_front_reflectance.reflectivity() > 70
 
 def detectLeftReflecting():
     """
@@ -206,6 +206,35 @@ def turnByDegrees(degrees):
         left_motor.spin(FORWARD, 5 + error * kP, RPM)
         right_motor.spin(FORWARD, 5 - error * kP, RPM)
         
+        
+def turnByDegreesFromWall(degrees):
+    """
+    Uses the IMU to turn the robot by a specified number of degrees.
+    """
+    # imu.reset_rotation()
+    # print("IMU rotation reset")
+
+    while True:
+        print("Target Rotation: " + str(degrees) + "Actual Rotation: " + str(imu.rotation()))
+        
+        if abs(degrees - imu.rotation()) < 0.5:
+            print("Turn complete")
+            left_motor.stop()
+            right_motor.stop()
+            return True
+
+        error = degrees - imu.rotation()
+        kP = 6
+        baseFeedforwardRPM = 30
+        turnBoost = 3
+        turnReduce = 1
+        if(error > 0):
+            left_motor.spin(FORWARD, baseFeedforwardRPM + error * kP * turnBoost, RPM)
+            right_motor.spin(FORWARD, baseFeedforwardRPM - error * kP * turnReduce, RPM)
+        else:
+            left_motor.spin(FORWARD, baseFeedforwardRPM + error * kP * turnReduce, RPM)
+            right_motor.spin(FORWARD, baseFeedforwardRPM - error * kP * turnBoost, RPM)
+        
 def turnToCardinal():
     """
     Uses the IMU to turn the robot by a specified number of degrees.
@@ -228,14 +257,18 @@ def turnToCardinal():
         left_motor.spin(FORWARD, 10 + error * kP, RPM)
         right_motor.spin(FORWARD, 10 - error * kP, RPM)
 
-def followHeading(direction):
+def followHeading(direction, targetHeading):
     """
     Adjusts driving to maintain a straight heading using the IMU.
     """
-    error = imu.rotation()
+    error = targetHeading - imu.rotation()
     kP = 12.5
     base_speed_RPM = 200
 
+    print("Target Rotation: " + str(targetHeading) + "Actual Rotation: " + str(imu.rotation()))
+    print("Error: " + str(error))
+    
+    
     if direction == "REVERSE":
         left_motor.spin(REVERSE, base_speed_RPM - error * kP, RPM)
         right_motor.spin(REVERSE, base_speed_RPM + error * kP, RPM)
@@ -243,7 +276,7 @@ def followHeading(direction):
         left_motor.spin(FORWARD, base_speed_RPM - error * kP, RPM)
         right_motor.spin(FORWARD, base_speed_RPM + error * kP, RPM)
 
-def goDistance(direction, distance):
+def goDistance(direction, distance, orientation):
     """
     Drives a specified distance while maintaining heading.
     """
@@ -252,7 +285,7 @@ def goDistance(direction, distance):
 
     while encoderToInches(left_motor.position()) < distance:
         print("Distance Traveled: " + str(encoderToInches(left_motor.position())) + "inches")
-        followHeading(direction)
+        followHeading(direction, orientation)
 
     left_motor.stop()
     right_motor.stop()
@@ -264,14 +297,14 @@ def trackDistanceTraveled(distance):
     """
     return encoderToInches(abs(left_motor.position(DEGREES))) > distance
 
-def followLineWithIMU(direction, side):
+def followLineWithIMU():
     """
     Uses the reflectance sensors to follow a line, adjusting motor speeds accordingly.
     """
     front_error = right_front_reflectance.reflectivity() - left_front_reflectance.reflectivity()
     rear_error = right_back_reflectance.reflectivity() - left_back_reflectance.reflectivity()
     
-    base_speed_RPM = 100
+    base_speed_RPM = 150
     front_kP = 0.5
     back_kP = 0.1
 
@@ -318,14 +351,21 @@ def lining_by_distance_with_IMU(distance):
     print("Starting lining by distance: " + str(distance) + "inches")
     left_motor.reset_position()
     while not trackDistanceTraveled(distance):
-        followLineWithIMU("FORWARD", "FRONT")
+        followLineWithIMU()
         print("Degrees: " + str(left_motor.position(DEGREES)))
         print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+    left_motor.stop()
+    right_motor.stop()
     return True  # Step completed successfully
 
 def turning(angle):
     print("Turning by " + str(angle) + " degrees")
     turnByDegrees(angle)
+    return True  # Step completed successfully
+
+def turning_from_wall(angle):
+    print("Turning by " + str(angle) + " degrees")
+    turnByDegreesFromWall(angle)
     return True  # Step completed successfully
 
 def driving_to_fruit(fruit_type):
@@ -346,31 +386,32 @@ def harvesting_fruit():
     
     lift_motor.spin_for(REVERSE, 1.5, TURNS, 50, RPM)
     right_motor.spin(REVERSE, 200, RPM)
-    lift_motor.spin(FORWARD, 10, RPM)
+    lift_motor.spin(FORWARD, 100, RPM)
     left_motor.spin_for(REVERSE, 5, TURNS, 200, RPM)
     lift_motor.stop()
     right_motor.stop()
 
     return True  # Step completed successfully
 
-def lining_by_ultrasonic(threshold):
-    front_sonar_timer.clear()
-    while front_sonar.distance(INCHES) >= threshold:
-        followLine("FORWARD", "FRONT")
+# def lining_by_ultrasonic(threshold):
+#     front_sonar_timer.clear()
+#     while front_sonar.distance(INCHES) >= threshold:
+#         followLine("FORWARD", "FRONT")
     
-    left_motor.stop()
-    right_motor.stop()
-    hopper_motor.spin_to_position(10)
-    return True  # Step completed successfully
+#     left_motor.stop()
+#     right_motor.stop()
+#     # hopper_motor.spin_to_position(10)
+#     return True  # Step completed successfully
 
 def lining_by_ultrasonic_with_IMU(threshold):
     front_sonar_timer.clear()
+    print("Starting lining by ultrasonic: " + str(threshold) + "inches")
+    print("Distance: " + str(front_sonar.distance(INCHES)))
     while front_sonar.distance(INCHES) >= threshold:
-        followLineWithIMU("FORWARD", "FRONT")
+        followLineWithIMU()
     
     left_motor.stop()
     right_motor.stop()
-    hopper_motor.spin_to_position(10)
     return True  # Step completed successfully
 
 def square_to_wall():
@@ -385,28 +426,70 @@ def square_to_wall():
             print("Squared to wall")
             return True
 
+def deposit_fruit():
+    hopper_motor.spin_to_position(10)
+    right_motor.spin(REVERSE, 200, RPM)
+    left_motor.spin_for(REVERSE, 1, TURNS, 200, RPM)
+    right_motor.stop()
+    return True  # Step completed successfully
+
+def driving_to_line(targetHeading):
+    left_motor.reset_position()
+    print("driving to line")
+    print("right front reflectance: " + str(right_front_reflectance.reflectivity()))
+    print("left front reflectance: " + str(left_front_reflectance.reflectivity()))
+    while not detectBothReflecting():
+        followHeading("FORWARD", targetHeading)
+        print("Degrees: " + str(left_motor.position(DEGREES)))
+        print("Distance traveled: " + str(encoderToInches(left_motor.position(DEGREES))))
+    right_motor.stop()
+    left_motor.stop()
+    return True  # Step completed successfully
+
 # Define step sequence with parameters
 autonomous_steps = [
-    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
-    (turning, [90]),  # Turn 90 degrees right
-    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (lining_by_distance_with_IMU, [26]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
     (harvesting_fruit, []),  # Harvest fruit
     
     (turning, [90]),  # Turn 180 degrees
     (square_to_wall, []),  # Square to wall
     
-    (turning, [0]),  # Turn 180 degrees
+    (turning_from_wall, [0]),  # Turn 180 degrees
 
     (lining_by_distance_with_IMU, [10]),  # Move 20 inches forward
-    (turning, [90]),  # Turn 90 degrees right
-    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
     (harvesting_fruit, []),  # Harvest fruit
 
     (turning, [90]),  # Turn 180 degrees
     (square_to_wall, []),  # Square to wall
     
-    (turning, [180]),  # Turn 180 degrees
-    (lining_by_ultrasonic, [5])  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    
+    (turning, [90]),  # Turn 180 degrees
+    (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
+    (deposit_fruit, []),  # Move to deposit fruit
+    
+    (turning, [270]),  # Turn 90 degrees right
+    (driving_to_line, [270]),  # Drive to line
+    (turning, [360]),  # Turn 90 degrees right   
+    (square_to_wall, []),  # Square to wall
+   
+   
+    # TESTING
+    
+    # (turning, [270]),  # Turn 90 degrees right
+    # (driving_to_line, [270]),  # Drive to line
+    
+    # (lining_by_distance_with_IMU, [5]),  # Move 20 inches forward
+    # (turning_from_wall, [90]),  # Turn 90 degrees right
+    # (square_to_wall, []),  # Square to wall
+    # (lining_by_distance_with_IMU, [5]),  # Move 20 inches forward
     
     # (lining_by_distance_with_IMU, [2225]),  # Move 5 inches forward
     # (turning, [(imu.rotation() - ((imu.rotation() + 45) // 90 * 90))])
@@ -419,6 +502,18 @@ def printTelemetryToBrain():
     brain.screen.print("current step " + str(current_step))
     brain.screen.new_line()
     brain.screen.print("rotation " + str(imu.rotation()))
+    brain.screen.new_line()
+    brain.screen.print("right fron reflectance " + str(right_front_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left front reflectance " + str(left_front_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("right back reflectance " + str(right_back_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left back reflectance " + str(left_back_reflectance.reflectivity()))
+    brain.screen.new_line()
+    brain.screen.print("left bumper " + str(left_back_bumper.pressing()))
+    brain.screen.new_line()
+    brain.screen.print("right bumper " + str(right_back_bumper.pressing()))
     brain.screen.new_line()
     brain.screen.set_cursor(1, 1)
 
