@@ -134,8 +134,8 @@ def driveToFruit(type):
                 return True
         else:
             # print("Object is too far away, adjusting position")
-            left_motor.spin(FORWARD, 50, RPM)
-            right_motor.spin(REVERSE, 50, RPM)
+            left_motor.spin(REVERSE, 50, RPM)
+            right_motor.spin(FORWARD, 50, RPM)
             lift_motor.stop()
     return False
 
@@ -397,7 +397,7 @@ def harvesting_fruit():
     
     lift_motor.spin_for(REVERSE, 1.5, TURNS, 50, RPM)
     right_motor.spin(REVERSE, 200, RPM)
-    lift_motor.spin(FORWARD, 100, RPM)
+    lift_motor.spin(FORWARD, 80, RPM)
     left_motor.spin_for(REVERSE, 5, TURNS, 200, RPM)
     lift_motor.stop()
     right_motor.stop()
@@ -417,25 +417,26 @@ def harvesting_fruit():
 previousSonarDistance = 0
 newSonarDistance = 0
 def lining_by_ultrasonic_with_IMU(threshold):
-    # print("Starting lining by ultrasonic: " + str(threshold) + "inches")
-    # print("Distance: " + str(front_sonar.distance(INCHES)))
+    print("Starting lining by ultrasonic: " + str(threshold) + "inches")
+    print("Distance: " + str(front_sonar.distance(INCHES)))
     
     # print("Average sonar distance: " + str(avgSonarDistance)
-    global previousSonarDistance
-    global newSonarDistance
+    # global previousSonarDistance
+    # global newSonarDistance
     
-    previousSonarDistance = newSonarDistance
-    newSonarDistance = front_sonar.distance(INCHES)
+    # previousSonarDistance = newSonarDistance
+    # newSonarDistance = front_sonar.distance(INCHES)
     
-    while newSonarDistance >= threshold:
+    while front_sonar.distance(INCHES) >= threshold:
         
-        previousSonarDistance = newSonarDistance
-        newSonarDistance = front_sonar.distance(INCHES)
-        print("New sonar distance: " + str(newSonarDistance))
-        print("Previous sonar distance: " + str(previousSonarDistance))
+        # previousSonarDistance = newSonarDistance
+        # newSonarDistance = front_sonar.distance(INCHES)
+        # print("New sonar distance: " + str(newSonarDistance))
+        # print("Previous sonar distance: " + str(previousSonarDistance))
         
         # print("lininy by ultrasonic " + str(avgSonarDistance) )
         # calculateAvgSonar()
+        print("Distance: " + str(front_sonar.distance(INCHES)))
         
         followLineWithIMU()
     
@@ -461,6 +462,7 @@ def deposit_fruit():
     right_motor.spin(REVERSE, 200, RPM)
     left_motor.spin_for(REVERSE, 1, TURNS, 200, RPM)
     right_motor.stop()
+    hopper_motor.spin_to_position(75)
     return True  # Step completed successfully
 
 def driving_to_line(targetHeading):
@@ -478,7 +480,7 @@ def driving_to_line(targetHeading):
 
 def drive_forward_onto_line():
     right_motor.spin(FORWARD, 200, RPM)
-    left_motor.spin_for(FORWARD, 3, TURNS, 200, RPM)
+    left_motor.spin_for(FORWARD, 3.5, TURNS, 200, RPM)
     right_motor.stop()
     return True
 
@@ -491,8 +493,12 @@ def recalibrate_imu():
     print("IMU recalibrated")
     return True  # Step completed successfully
 
-def printTelemetry(string):
-    print("telemetry: " + str(string))
+def printTelemetry(toPrint):
+    print("telemetry: " + str(toPrint))
+    wait(500)  # wait 100ms to avoid flooding the console
+    return True
+
+def wait500ms():
     wait(500)  # wait 100ms to avoid flooding the console
     return True
 
@@ -501,142 +507,149 @@ autonomous_steps = [
     
     # LEMON LEMON LEMON LEMON 
     
-    # (lining_by_distance_with_IMU, [25]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["lemon"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
-    
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
-    
-    # (turning_from_wall, [0]),  # Turn 180 degrees
-
-    # (lining_by_distance_with_IMU, [10]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["lemon"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
-
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
-    
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    
-    # (turning, [90]),  # Turn 180 degrees
-    # (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
-    # (deposit_fruit, []),  # Move to deposit fruit
-    
-    # (turning, [270]),  # Turn 90 degrees right
-    # (driving_to_line, [270]),  # Drive to line
-    # (turning, [350]),  # Turn 90 degrees right   
-    # (square_to_wall, []),  # Square to wall
    
-    # (recalibrate_imu, []),  # Recalibrate IMU
+    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
+    (turning, [-20]),
+    (drive_forward_onto_line, []),  # Move onto line
+    
+    
+    (lining_by_distance_with_IMU, [6]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
+    
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
+    
+    (turning_from_wall, [0]),  # Turn 180 degrees
+
+    (lining_by_distance_with_IMU, [8]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lemon"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
+
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
+    
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    
+    (turning, [90]),  # Turn 180 degrees
+    (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
+    (deposit_fruit, []),  # Move to deposit fruit
+    
+    (turning, [270]),  # Turn 90 degrees right
+    (driving_to_line, [270]),  # Drive to line
+    (turning, [350]),  # Turn 90 degrees right   
+    (square_to_wall, []),  # Square to wall
+   
+    (recalibrate_imu, []),  # Recalibrate IMU
    
    
    
    
     # # RECALIBRAITON
    
-    # (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
-    # (turning, [-20]),
-    # (drive_forward_onto_line, []),  # Move onto line
+    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
+    (turning, [-20]),
+    (drive_forward_onto_line, []),  # Move onto line
     
     
     
     
-    # # LIME LIME LIME LIME
+    # LIME LIME LIME LIME
     
-    # (lining_by_distance_with_IMU, [46]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["lime"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
+    (lining_by_distance_with_IMU, [46]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lime"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
     
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
     
-    # (turning_from_wall, [0]),  # Turn 180 degrees
+    (turning_from_wall, [0]),  # Turn 180 degrees
 
-    # (lining_by_distance_with_IMU, [10]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["lime"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
+    (lining_by_distance_with_IMU, [8]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["lime"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
 
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
     
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (printTelemetry, ["starting lining by ultrasonic"]),
-    # (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    # (printTelemetry, ["finished lining by ultrasonic"]),
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (printTelemetry, ["starting lining by ultrasonic"]),
+    (lining_by_distance_with_IMU, [35]),  # Move 20 inches forward
+    (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (printTelemetry, ["finished lining by ultrasonic"]),
     
-    # (printTelemetry, ["turning to 90"]),
-    # (turning, [90]),  # Turn 180 degrees
-    # (printTelemetry, ["starting lining by distance"]),
-    # (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
-    # (deposit_fruit, []),  # Move to deposit fruit
+    (printTelemetry, ["turning to 90"]),
+    (turning, [90]),  # Turn 180 degrees
+    (printTelemetry, ["starting lining by distance"]),
+    (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
+    (deposit_fruit, []),  # Move to deposit fruit
     
-    # (turning, [270]),  # Turn 90 degrees right
-    # (driving_to_line, [270]),  # Drive to line
-    # (turning, [350]),  # Turn 90 degrees right   
-    # (square_to_wall, []),  # Square to wall
+    (turning, [270]),  # Turn 90 degrees right
+    (driving_to_line, [270]),  # Drive to line
+    (turning, [350]),  # Turn 90 degrees right   
+    (square_to_wall, []),  # Square to wall
    
-    # (recalibrate_imu, []),  # Recalibrate IMU
+    (recalibrate_imu, []),  # Recalibrate IMU
     
    
    
     # RECALIBRAITON
    
-    # (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
-    # (turning, [-20]),
-    # (drive_forward_onto_line, []),  # Move onto line
+    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
+    (turning, [-20]),
+    (drive_forward_onto_line, []),  # Move onto line
     
     
     
     
-    # # ORANGUTAN ORANGUTAN ORANGUTAN ORANGUTAN
+    # ORANGUTAN ORANGUTAN ORANGUTAN ORANGUTAN
     
-    # (lining_by_distance_with_IMU, [80]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
+    (lining_by_distance_with_IMU, [80]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
     
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
     
-    # (turning_from_wall, [0]),  # Turn 180 degrees
+    (turning_from_wall, [0]),  # Turn 180 degrees
 
-    # (lining_by_distance_with_IMU, [10]),  # Move 20 inches forward
-    # (turning_from_wall, [90]),  # Turn 90 degrees right
-    # (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
-    # (harvesting_fruit, []),  # Harvest fruit
+    (lining_by_distance_with_IMU, [8]),  # Move 20 inches forward
+    (turning_from_wall, [90]),  # Turn 90 degrees right
+    (driving_to_fruit, ["orangutan"]),  # Drive towards fruit
+    (harvesting_fruit, []),  # Harvest fruit
 
-    # (turning, [90]),  # Turn 180 degrees
-    # (square_to_wall, []),  # Square to wall
+    (turning, [90]),  # Turn 180 degrees
+    (square_to_wall, []),  # Square to wall
     
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (printTelemetry, ["starting lining by ultrasonic"]),
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_distance_with_IMU, [70]),  # Move 20 inches forward
+    # (wait500ms, []),  # Wait 500ms
     (lining_by_ultrasonic_with_IMU, [14]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    # (printTelemetry, ["finished lining by ultrasonic"]),
     
-    # (printTelemetry, ["turning to 90"]),
-    # (turning, [90]),  # Turn 180 degrees
-    # (printTelemetry, ["starting lining by distance"]),
-    # (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
-    # (turning_from_wall, [180]),  # Turn 180 degrees
-    # (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
-    # (deposit_fruit, []),  # Move to deposit fruit
+    (printTelemetry, ["turning to 90"]),
+    (turning, [90]),  # Turn 180 degrees
+    (printTelemetry, ["starting lining by distance"]),
+    (lining_by_distance_with_IMU, [24]),  # Stop when ultrasonic sensor detects an object at 2 inches
+    (turning_from_wall, [180]),  # Turn 180 degrees
+    (lining_by_ultrasonic_with_IMU, [2]),  # Move 20 inches forward
+    (deposit_fruit, []),  # Move to deposit fruit
     
-    # (turning, [270]),  # Turn 90 degrees right
-    # (driving_to_line, [270]),  # Drive to line
-    # (turning, [350]),  # Turn 90 degrees right   
-    # (square_to_wall, []),  # Square to wall
+    (turning, [270]),  # Turn 90 degrees right
+    (driving_to_line, [270]),  # Drive to line
+    (turning, [350]),  # Turn 90 degrees right   
+    (square_to_wall, []),  # Square to wall
    
-    # (recalibrate_imu, []),  # Recalibrate IMU
+    (recalibrate_imu, []),  # Recalibrate IMU
     
     
     
