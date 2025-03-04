@@ -202,7 +202,7 @@ def turnByDegrees(degrees):
             return True
 
         error = degrees - imu.rotation()
-        kP = 4
+        kP = 6
         left_motor.spin(FORWARD, 5 + error * kP, RPM)
         right_motor.spin(FORWARD, 5 - error * kP, RPM)
         
@@ -227,7 +227,7 @@ def turnByDegreesFromWall(degrees):
         kP = 6
         baseFeedforwardRPM = 30
         turnBoost = 3
-        turnReduce = 1
+        turnReduce = 0.4
         if(error > 0):
             left_motor.spin(FORWARD, baseFeedforwardRPM + error * kP * turnBoost, RPM)
             right_motor.spin(FORWARD, baseFeedforwardRPM - error * kP * turnReduce, RPM)
@@ -261,7 +261,7 @@ def followHeading(direction, targetHeading):
     """
     Adjusts driving to maintain a straight heading using the IMU.
     """
-    error = targetHeading - imu.rotation()
+    error = imu.rotation() - targetHeading
     kP = 12.5
     base_speed_RPM = 200
 
@@ -404,7 +404,6 @@ def harvesting_fruit():
 #     return True  # Step completed successfully
 
 def lining_by_ultrasonic_with_IMU(threshold):
-    front_sonar_timer.clear()
     print("Starting lining by ultrasonic: " + str(threshold) + "inches")
     print("Distance: " + str(front_sonar.distance(INCHES)))
     while front_sonar.distance(INCHES) >= threshold:
@@ -446,9 +445,24 @@ def driving_to_line(targetHeading):
     left_motor.stop()
     return True  # Step completed successfully
 
+def drive_forward_onto_line():
+    right_motor.spin(FORWARD, 200, RPM)
+    left_motor.spin_for(FORWARD, 2, TURNS, 200, RPM)
+    right_motor.stop()
+    return True
+
+def recalibrate_imu():
+    imu.calibrate()
+    while imu.is_calibrating(): # wait 2 seconds for imu to calibrate
+        print("Calibrating IMU...")
+        wait(100)  # wait 100ms to avoid flooding the console
+    imu.reset_rotation()
+    print("IMU recalibrated")
+    return True  # Step completed successfully
+
 # Define step sequence with parameters
 autonomous_steps = [
-    (lining_by_distance_with_IMU, [26]),  # Move 20 inches forward
+    (lining_by_distance_with_IMU, [25]),  # Move 20 inches forward
     (turning_from_wall, [90]),  # Turn 90 degrees right
     (driving_to_fruit, ["lemon"]),  # Drive towards fruit
     (harvesting_fruit, []),  # Harvest fruit
@@ -477,10 +491,18 @@ autonomous_steps = [
     
     (turning, [270]),  # Turn 90 degrees right
     (driving_to_line, [270]),  # Drive to line
-    (turning, [360]),  # Turn 90 degrees right   
+    (turning, [350]),  # Turn 90 degrees right   
     (square_to_wall, []),  # Square to wall
    
+    (recalibrate_imu, []),  # Recalibrate IMU
    
+    (lining_by_distance_with_IMU, [15]),  # Move 20 inches forward
+    (turning, [-20]),
+    (drive_forward_onto_line, []),  # Move onto line
+    (lining_by_distance_with_IMU, [25]),  # Move 20 inches forward
+    
+    
+    
     # TESTING
     
     # (turning, [270]),  # Turn 90 degrees right
@@ -514,6 +536,8 @@ def printTelemetryToBrain():
     brain.screen.print("left bumper " + str(left_back_bumper.pressing()))
     brain.screen.new_line()
     brain.screen.print("right bumper " + str(right_back_bumper.pressing()))
+    brain.screen.new_line()
+    brain.screen.print("front sonar " + str(front_sonar.distance(INCHES)))
     brain.screen.new_line()
     brain.screen.set_cursor(1, 1)
 
